@@ -1,5 +1,6 @@
 import time
 import warnings
+from dataclasses import dataclass, field
 
 try:
     import hppfcl
@@ -24,6 +25,31 @@ else:
 
 
 MESH_TYPES = (hppfcl.BVHModelBase, hppfcl.HeightFieldOBBRSS, hppfcl.HeightFieldAABB)
+
+
+@dataclass
+class _PathPlayerState:
+    current: object = None
+    paths: dict = field(default_factory=dict)
+    counter: int = 0
+    playing: bool = False
+    thread: object = None
+    update_lock: bool = False
+
+
+@dataclass
+class _DisplayState:
+    collisions: bool = False
+    visuals: bool = True
+    frames: bool = False
+
+
+@dataclass
+class _SelectionState:
+    node_name: str | None = None
+    frames: list = field(default_factory=list)
+    geom_name: str | None = None
+    geom_type: str | None = None
 
 
 class Viewer(BaseVisualizer):
@@ -57,16 +83,14 @@ class Viewer(BaseVisualizer):
             visual_data=None,
         )
         self.viser_frames = {}
-        self.display_collisions = False
-        self.display_visuals = True
-        self.display_frames_flag = False
+        self._display = _DisplayState()
+        self._path_player = _PathPlayerState()
+        self._selection = _SelectionState()
+        self._node_to_geom_info = {}
         self.viewerRootNodeName = None
         self.framesRootNodeName = None
         self.framesRootFrame = None
         self._viewer_initialized = False
-        self.path = None
-        self.path_playing = False
-        self.path_thread = None
 
     def __call__(self, q):
         """Allow calling viewer as v(q) for compatibility with Gepetto-GUI."""
@@ -200,7 +224,7 @@ class Viewer(BaseVisualizer):
                 axes_radius=frame_axis_radius,
                 visible=False,
             )
-        self.display_frames_flag = False
+        self._display.frames = False
 
         # Add display controls
         self._create_display_controls()
@@ -217,6 +241,155 @@ class Viewer(BaseVisualizer):
         @self.frames_checkbox.on_update
         def _on_frames_toggle(_):
             self.displayFrames(self.frames_checkbox.value)
+
+        self._create_selection_panel()
+        self._create_path_player()
+
+    def _create_selection_panel(self):
+        """Create GUI panel for displaying selected object info."""
+        selection_folder = self.viewer.gui.add_folder("Selected Object")
+
+        with selection_folder:
+            self._selection_name_text = self.viewer.gui.add_markdown("*None*")
+            self._selection_type_text = self.viewer.gui.add_markdown("")
+            self._focus_button = self.viewer.gui.add_button("Focus Selected")
+
+        @self._focus_button.on_click
+        def _on_focus_click(_):
+            self._focus_selected()
+
+    def _create_path_player(self):
+        """Create the path player GUI controls (always visible)."""
+        path_folder = self.viewer.gui.add_folder("Path Player")
+
+        with path_folder:
+            self.path_dropdown = self.viewer.gui.add_dropdown(
+                "Path", options=["None"], initial_value="None"
+            )
+
+            self.path_slider = self.viewer.gui.add_slider(
+                "Position (s)",
+                min=0.0,
+                max=1.0,
+                step=0.001,
+                initial_value=0.0,
+            )
+
+            self.play_button = self.viewer.gui.add_button("Play")
+            self.stop_button = self.viewer.gui.add_button("Stop")
+
+            self.speed_slider = self.viewer.gui.add_slider(
+                "Speed", min=0.1, max=10.0, step=0.1, initial_value=1.0
+            )
+
+            self.fps_slider = self.viewer.gui.add_slider(
+                "Target FPS", min=10, max=120, step=5, initial_value=60
+            )
+
+        @self.path_dropdown.on_update
+        def _on_path_select(_):
+            self._path_player.playing = False
+            name = self.path_dropdown.value
+            if name == "None":
+                self._path_player.current = None
+                return
+            self._path_player.current = self._path_player.paths[name]
+            self._path_player.update_lock = True
+            self.path_slider.max = float(self._path_player.current.length())
+            self.path_slider.value = 0.0
+            self._path_player.update_lock = False
+            q, success = self._path_player.current.eval(0.0)
+            if success:
+                self.display(q)
+
+        @self.path_slider.on_update
+        def _on_slider_update(_):
+            if (
+                not self._path_player.update_lock
+                and self._path_player.current is not None
+            ):
+                q, success = self._path_player.current.eval(self.path_slider.value)
+                if success:
+                    self.display(q)
+
+        @self.play_button.on_click
+        def _on_play_click(_):
+            if self._path_player.current is not None and not self._path_player.playing:
+                self._path_player.playing = True
+                self._start_path_animation()
+
+        @self.stop_button.on_click
+        def _on_stop_click(_):
+            self._path_player.playing = False
+
+    def _register_click_callback(self, handle, node_name):
+        """Register a click callback on a mesh handle for selection."""
+
+        @handle.on_click
+        def _on_mesh_click(_):
+            self._select_node(node_name)
+
+    def _select_node(self, node_name):
+        """Select or deselect a scene node."""
+        if self._selection.node_name == node_name:
+            self._deselect()
+            return
+
+        self._deselect()
+
+        frames = self._get_geometry_frames(node_name)
+
+        geom_info = self._node_to_geom_info.get(node_name, {})
+        self._selection.node_name = node_name
+        self._selection.frames = frames
+        self._selection.geom_name = geom_info.get("name")
+        self._selection.geom_type = geom_info.get("type")
+
+        self._update_selection_panel()
+
+    def _deselect(self):
+        """Clear the current selection."""
+        self._selection.node_name = None
+        self._selection.frames = []
+        self._selection.geom_name = None
+        self._selection.geom_type = None
+        self._update_selection_panel()
+
+    def _update_selection_panel(self):
+        """Update the selection info panel GUI."""
+        if self._selection.geom_name is not None:
+            self._selection_name_text.content = f"**{self._selection.geom_name}**"
+            self._selection_type_text.content = f"Type: {self._selection.geom_type}"
+        else:
+            self._selection_name_text.content = "*None*"
+            self._selection_type_text.content = ""
+
+    def _focus_selected(self):
+        """Center the camera on the currently selected object."""
+        if self._selection.node_name is None:
+            return
+
+        geom_info = self._node_to_geom_info.get(self._selection.node_name, {})
+        geometry_type = geom_info.get("geometry_type")
+        geom_name = geom_info.get("name")
+        if geometry_type is None or geom_name is None:
+            return
+
+        if geometry_type == pin.GeometryType.VISUAL and self.visual_model is not None:
+            geom_id = self.visual_model.getGeometryId(geom_name)
+            position = self.visual_data.oMg[geom_id].translation
+        elif (
+            geometry_type == pin.GeometryType.COLLISION
+            and self.collision_model is not None
+        ):
+            geom_id = self.collision_model.getGeometryId(geom_name)
+            position = self.collision_data.oMg[geom_id].translation
+        else:
+            return
+
+        clients = self.viewer.get_clients()
+        for client in clients.values():
+            client.camera.look_at = position
 
     def loadViewerGeometryObject(self, geometry_object, geometry_type, color=None):
         """Load a single geometry object with hierarchical naming."""
@@ -240,6 +413,10 @@ class Viewer(BaseVisualizer):
             primitive_color = (0.5, 0.5, 0.5, 1.0)
         else:
             primitive_color = color_override
+
+        type_str = (
+            "collision" if geometry_type == pin.GeometryType.COLLISION else "visual"
+        )
 
         try:
             if isinstance(geom, hppfcl.Box):
@@ -316,13 +493,24 @@ class Viewer(BaseVisualizer):
                 warnings.warn(msg, category=UserWarning, stacklevel=2)
                 return
 
+            # Store geometry info for selection lookups
+            geom_info = {
+                "name": geometry_object.name,
+                "type": type_str,
+                "geometry_type": geometry_type,
+            }
+
             # Handle both single frame and list of frames (for multi-geometry COLLADA)
             if isinstance(frame, list):
                 for i, f in enumerate(frame):
                     indexed_name = f"{node_name}_{i}"
                     self.viser_frames[indexed_name] = f
+                    self._node_to_geom_info[indexed_name] = geom_info
+                    self._register_click_callback(f, node_name)
             else:
                 self.viser_frames[node_name] = frame
+                self._node_to_geom_info[node_name] = geom_info
+                self._register_click_callback(frame, node_name)
 
         except Exception as e:
             msg = (
@@ -463,7 +651,7 @@ class Viewer(BaseVisualizer):
             pin.forwardKinematics(self.model, self.data, q)
 
         with self.viewer.atomic():
-            if self.display_visuals and self.visual_model is not None:
+            if self._display.visuals and self.visual_model is not None:
                 pin.updateGeometryPlacements(
                     self.model, self.data, self.visual_model, self.visual_data
                 )
@@ -480,7 +668,7 @@ class Viewer(BaseVisualizer):
                         frame.position = M.translation * visual.meshScale
                         frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
 
-            if self.display_collisions and self.collision_model is not None:
+            if self._display.collisions and self.collision_model is not None:
                 pin.updateGeometryPlacements(
                     self.model, self.data, self.collision_model, self.collision_data
                 )
@@ -497,7 +685,7 @@ class Viewer(BaseVisualizer):
                         frame.position = M.translation * collision.meshScale
                         frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
 
-            if self.display_frames_flag:
+            if self._display.frames:
                 self.updateFrames()
 
     def updateFrames(self):
@@ -516,7 +704,7 @@ class Viewer(BaseVisualizer):
 
     def displayCollisions(self, visibility):
         """Set whether to display collision objects or not."""
-        self.display_collisions = visibility
+        self._display.collisions = visibility
         if self.collision_model is None:
             return
 
@@ -529,7 +717,7 @@ class Viewer(BaseVisualizer):
 
     def displayVisuals(self, visibility):
         """Set whether to display visual objects or not."""
-        self.display_visuals = visibility
+        self._display.visuals = visibility
         if self.visual_model is None:
             return
 
@@ -540,7 +728,7 @@ class Viewer(BaseVisualizer):
 
     def displayFrames(self, visibility):
         """Set whether to display frames or not."""
-        self.display_frames_flag = visibility
+        self._display.frames = visibility
 
         if self.framesRootFrame is not None:
             self.framesRootFrame.visible = visibility
@@ -574,67 +762,42 @@ class Viewer(BaseVisualizer):
             height=height, width=width, transport_format=transport_format
         )
 
-    def loadPath(self, path):
-        """Load a path and create GUI controls for playback."""
-        self.path = path
-        self.path_playing = False
-        self.path_update_lock = False
+    def loadPath(self, path, name=None):
+        """Load a path into the path player dropdown."""
+        if name is None:
+            name = f"Path {self._path_player.counter}"
+        self._path_player.counter += 1
 
-        path_folder = self.viewer.gui.add_folder("Path Player")
+        self._path_player.playing = False
+        self._path_player.paths[name] = path
+        self._path_player.current = path
 
-        with path_folder:
-            self.path_slider = self.viewer.gui.add_slider(
-                "Position (s)",
-                min=0.0,
-                max=float(path.length()),
-                step=0.001,
-                initial_value=0.0,
-            )
+        self.path_dropdown.options = list(self._path_player.paths.keys())
+        self.path_dropdown.value = name
 
-            self.play_button = self.viewer.gui.add_button("▶ Play")
-            self.stop_button = self.viewer.gui.add_button("⏸ Stop")
+        self._path_player.update_lock = True
+        self.path_slider.max = float(path.length())
+        self.path_slider.value = 0.0
+        self._path_player.update_lock = False
 
-            self.speed_slider = self.viewer.gui.add_slider(
-                "Speed", min=0.1, max=10.0, step=0.1, initial_value=1.0
-            )
-
-            self.fps_slider = self.viewer.gui.add_slider(
-                "Target FPS", min=10, max=120, step=5, initial_value=60
-            )
-
-        @self.path_slider.on_update
-        def _on_slider_update(_):
-            if not self.path_update_lock:
-                q, success = self.path.eval(self.path_slider.value)
-                if success:
-                    self.display(q)
-
-        @self.play_button.on_click
-        def _on_play_click(_):
-            if not self.path_playing:
-                self.path_playing = True
-                self._start_path_animation()
-
-        @self.stop_button.on_click
-        def _on_stop_click(_):
-            self.path_playing = False
-
-        q, success = self.path.eval(0.0)
+        q, success = path.eval(0.0)
         if success:
             self.display(q)
 
     def _start_path_animation(self):
         """Start animating the path in a background thread."""
-        if self.path_thread is not None and self.path_thread.is_alive():
+        if self._path_player.current is None:
+            return
+        if self._path_player.thread is not None and self._path_player.thread.is_alive():
             return
 
         def animate():
-            path_length = self.path.length()
+            path_length = self._path_player.current.length()
             path_time = self.path_slider.value
             last_wall_time = time.perf_counter()
             slider_update_counter = 0
 
-            while self.path_playing and path_time < path_length:
+            while self._path_player.playing and path_time < path_length:
                 frame_start = time.perf_counter()
                 target_frame_time = 1.0 / self.fps_slider.value
 
@@ -644,16 +807,16 @@ class Viewer(BaseVisualizer):
                 path_time += wall_dt * self.speed_slider.value
                 path_time = min(path_time, path_length)
 
-                q, success = self.path.eval(path_time)
+                q, success = self._path_player.current.eval(path_time)
 
                 if success:
                     self.display(q)
 
                 slider_update_counter += 1
                 if slider_update_counter >= 10:
-                    self.path_update_lock = True
+                    self._path_player.update_lock = True
                     self.path_slider.value = path_time
-                    self.path_update_lock = False
+                    self._path_player.update_lock = False
                     slider_update_counter = 0
 
                 # Adaptive sleep
@@ -662,14 +825,14 @@ class Viewer(BaseVisualizer):
                 if sleep_time > 0:
                     time.sleep(sleep_time)
 
-            self.path_update_lock = True
+            self._path_player.update_lock = True
             self.path_slider.value = 0.0 if path_time >= path_length else path_time
-            self.path_update_lock = False
+            self._path_player.update_lock = False
 
-            self.path_playing = False
+            self._path_player.playing = False
 
-        self.path_thread = threading.Thread(target=animate, daemon=True)
-        self.path_thread.start()
+        self._path_player.thread = threading.Thread(target=animate, daemon=True)
+        self._path_player.thread.start()
 
     def setBackgroundColor(self):
         raise NotImplementedError()
