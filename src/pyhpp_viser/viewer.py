@@ -98,7 +98,11 @@ class Viewer(BaseVisualizer):
                 self.graph = problem.constraintGraph()
             except AttributeError:
                 pass
+        self._robot = robot
         self._config_queue = None
+        self._contact_surface_frames = {}
+        self._contact_surface_joints = {}
+        self._contact_surfaces_root = None
 
     def __call__(self, q):
         """Allow calling viewer as v(q) for compatibility with Gepetto-GUI."""
@@ -231,6 +235,10 @@ class Viewer(BaseVisualizer):
                 axes_length=frame_axis_length,
                 axes_radius=frame_axis_radius,
             )
+
+        # Auto-load contact surfaces if the robot supports them
+        if hasattr(self._robot, "contactSurfaces"):
+            self.loadContactSurfaces(self._robot)
 
         # Add display controls
         self._create_display_controls()
@@ -693,6 +701,7 @@ class Viewer(BaseVisualizer):
                         frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
 
             self.updateFrames()
+            self.updateContactSurfaces()
 
     def updateFrames(self):
         """Update the position and orientation of all frames."""
@@ -738,6 +747,90 @@ class Viewer(BaseVisualizer):
             self.framesRootFrame.visible = visibility
         if visibility:
             self.updateFrames()
+
+    def loadContactSurfaces(self, robot, color=(0.2, 0.8, 0.2, 0.5)):
+        """Load contact surfaces from a manipulation device.
+
+        Args:
+            robot: A pyhpp.manipulation.Device with contact surfaces
+            color: RGBA tuple for surface color (default: semi-transparent green)
+        """
+        if not hasattr(robot, "contactSurfaces"):
+            warnings.warn(
+                "Robot does not have contactSurfaces method. ",
+                UserWarning,
+            )
+            return
+
+        surfaces = robot.contactSurfaces()
+        if not surfaces:
+            return
+
+        contact_root = self.viewerRootNodeName + "/contact_surfaces"
+        self._contact_surfaces_root = self.viewer.scene.add_frame(
+            contact_root, show_axes=False, visible=False
+        )
+
+        for surface_name, surface_list in surfaces.items():
+            for idx, surface_data in enumerate(surface_list):
+                joint_name = surface_data["joint"]
+                points = surface_data["points"]
+
+                if len(points) < 3:
+                    continue
+
+                node_name = f"{contact_root}/{surface_name}_{idx}"
+                vertices = np.array(points, dtype=np.float32)
+                num_pts = len(vertices)
+
+                if num_pts == 3:
+                    faces = np.array([[0, 1, 2]], dtype=np.int32)
+                else:
+                    faces = self._triangulate_convex_polygon(num_pts)
+
+                try:
+                    mesh_handle = self.viewer.scene.add_mesh_simple(
+                        node_name,
+                        vertices,
+                        faces,
+                        color=color[:3],
+                        opacity=color[3],
+                        side="double",
+                    )
+                    self._contact_surface_frames[node_name] = mesh_handle
+                    self._contact_surface_joints[node_name] = joint_name
+                except Exception as e:
+                    warnings.warn(
+                        f"Failed to create contact surface {surface_name}: {e}",
+                        UserWarning,
+                    )
+
+    def _triangulate_convex_polygon(self, num_vertices):
+        """Triangulate a convex polygon using fan triangulation."""
+        faces = []
+        for i in range(1, num_vertices - 1):
+            faces.append([0, i, i + 1])
+        return np.array(faces, dtype=np.int32)
+
+    def displayContactSurfaces(self, visibility):
+        """Set whether to display contact surfaces or not."""
+        if self._contact_surfaces_root is not None:
+            self._contact_surfaces_root.visible = visibility
+
+    def updateContactSurfaces(self):
+        """Update contact surface positions based on current joint transforms."""
+        for node_name, mesh_handle in self._contact_surface_frames.items():
+            joint_name = self._contact_surface_joints.get(node_name)
+            if joint_name == "universe" or joint_name is None:
+                continue
+
+            try:
+                frame = self.model.getFrameId(joint_name)
+                M = self.data.oMf[frame]
+                mesh_handle.position = M.translation
+                mesh_handle.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
+            except (ValueError, KeyError):
+                pass
 
     def captureImage(self, w=None, h=None, client_id=None, transport_format="jpeg"):
         """Capture an image from the Viser viewer."""
