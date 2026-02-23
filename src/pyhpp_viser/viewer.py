@@ -245,20 +245,15 @@ class Viewer(BaseVisualizer):
 
     def _create_display_controls(self):
         """Create GUI controls for display options."""
-        display_folder = self.viewer.gui.add_folder("Display Controls")
+        tab_group = self.viewer.gui.add_tab_group()
 
-        with display_folder:
-            self.frames_checkbox = self.viewer.gui.add_checkbox(
-                "Show Frames", initial_value=False
-            )
+        with tab_group.add_tab("Controls"):
+            self._create_selection_panel()
+            self._create_path_player()
+            self._create_graph_viewer_controls()
 
-        @self.frames_checkbox.on_update
-        def _on_frames_toggle(_):
-            self.displayFrames(self.frames_checkbox.value)
-
-        self._create_selection_panel()
-        self._create_path_player()
-        self._create_graph_viewer_controls()
+        with tab_group.add_tab("Display"):
+            self._create_visibility_toggles()
 
     def _create_selection_panel(self):
         """Create GUI panel for displaying selected object info."""
@@ -935,6 +930,37 @@ class Viewer(BaseVisualizer):
         @self._graph_button.on_click
         def _on_show_graph_click(_):
             self._launch_graph_viewer()
+
+    def _create_visibility_toggles(self):
+        """Create checkboxes for toggling visibility of scene elements."""
+        vis_checkbox = self.viewer.gui.add_checkbox(
+            "Show Visuals", initial_value=self._display.visuals
+        )
+        col_checkbox = self.viewer.gui.add_checkbox(
+            "Show Collisions", initial_value=self._display.collisions
+        )
+        frames_checkbox = self.viewer.gui.add_checkbox(
+            "Show Frames", initial_value=False
+        )
+        contacts_checkbox = self.viewer.gui.add_checkbox(
+            "Show Contact Surfaces", initial_value=False
+        )
+
+        @vis_checkbox.on_update
+        def _(_):
+            self.displayVisuals(vis_checkbox.value)
+
+        @col_checkbox.on_update
+        def _(_):
+            self.displayCollisions(col_checkbox.value)
+
+        @frames_checkbox.on_update
+        def _(_):
+            self.displayFrames(frames_checkbox.value)
+
+        @contacts_checkbox.on_update
+        def _(_):
+            self.displayContactSurfaces(contacts_checkbox.value)
 
     def setProblem(self, problem):
         """Set Problem for graph viewer integration.
