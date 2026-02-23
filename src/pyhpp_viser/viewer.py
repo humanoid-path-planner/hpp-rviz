@@ -107,8 +107,10 @@ class Viewer(BaseVisualizer):
     def __call__(self, q):
         """Allow calling viewer as v(q) for compatibility with Gepetto-GUI."""
         if not self._viewer_initialized:
-            self.initViewer(open=True, loadModel=True)
-            self._viewer_initialized = True
+            if hasattr(self, "viewer") and self.viewer is not None:
+                self.loadViewerModel()
+            else:
+                self.initViewer(open=True, loadModel=True)
         self.display(q)
 
     def getGeometryObjectNodeName(
@@ -153,6 +155,20 @@ class Viewer(BaseVisualizer):
                 self.viser_frames[frame_path] = self.viewer.scene.add_frame(
                     frame_path, show_axes=False
                 )
+
+    def start(self, host="localhost", port="8000", open=True):
+        """Start the viewer, load the robot model, and open the browser.
+
+        This is the recommended way to initialize the viewer:
+            viewer = Viewer(robot)
+            viewer.start()
+
+        Args:
+            host: Server hostname (default: localhost)
+            port: Server port (default: 8000)
+            open: Open browser automatically (default: True)
+        """
+        self.initViewer(open=open, loadModel=True, host=host, port=port)
 
     def initViewer(
         self,
