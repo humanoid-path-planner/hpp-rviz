@@ -902,6 +902,30 @@ class Viewer(BaseVisualizer):
         self.display(config)
         print(f"Displayed config: {label}")
 
+    def playPath(self, path, speed=1):
+        """
+        Play a path animation (blocking).
+
+        DEPRECATED: Use loadPath() then use GUI controls for playback.
+
+        Args:
+            path: The path to play
+            speed: Playback speed multiplier (default 1)
+        """
+        warnings.warn(
+            "'playPath' is deprecated since HPP 5.0. "
+            "Use loadPath(path) and GUI controls instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.loadPath(path)
+        self.speed_slider.value = speed
+        self._path_player.playing = True
+        self._start_path_animation()
+        # Block until playback completes (for old API compatibility)
+        while self._path_player.playing:
+            time.sleep(0.1)
+
     def setBackgroundColor(self):
         raise NotImplementedError()
 
