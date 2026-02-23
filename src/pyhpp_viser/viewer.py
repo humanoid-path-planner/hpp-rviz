@@ -41,7 +41,6 @@ class _PathPlayerState:
 class _DisplayState:
     collisions: bool = False
     visuals: bool = True
-    frames: bool = False
 
 
 @dataclass
@@ -99,13 +98,19 @@ class Viewer(BaseVisualizer):
                 self.graph = problem.constraintGraph()
             except AttributeError:
                 pass
+        self._robot = robot
         self._config_queue = None
+        self._contact_surface_frames = {}
+        self._contact_surface_joints = {}
+        self._contact_surfaces_root = None
 
     def __call__(self, q):
         """Allow calling viewer as v(q) for compatibility with Gepetto-GUI."""
         if not self._viewer_initialized:
-            self.initViewer(open=True, loadModel=True)
-            self._viewer_initialized = True
+            if hasattr(self, "viewer") and self.viewer is not None:
+                self.loadViewerModel()
+            else:
+                self.initViewer(open=True, loadModel=True)
         self.display(q)
 
     def getGeometryObjectNodeName(
@@ -150,6 +155,20 @@ class Viewer(BaseVisualizer):
                 self.viser_frames[frame_path] = self.viewer.scene.add_frame(
                     frame_path, show_axes=False
                 )
+
+    def start(self, host="localhost", port="8000", open=True):
+        """Start the viewer, load the robot model, and open the browser.
+
+        This is the recommended way to initialize the viewer:
+            viewer = Viewer(robot)
+            viewer.start()
+
+        Args:
+            host: Server hostname (default: localhost)
+            port: Server port (default: 8000)
+            open: Open browser automatically (default: True)
+        """
+        self.initViewer(open=open, loadModel=True, host=host, port=port)
 
     def initViewer(
         self,
@@ -231,29 +250,26 @@ class Viewer(BaseVisualizer):
                 show_axes=True,
                 axes_length=frame_axis_length,
                 axes_radius=frame_axis_radius,
-                visible=False,
             )
-        self._display.frames = False
+
+        # Auto-load contact surfaces if the robot supports them
+        if hasattr(self._robot, "contactSurfaces"):
+            self.loadContactSurfaces(self._robot)
 
         # Add display controls
         self._create_display_controls()
 
     def _create_display_controls(self):
         """Create GUI controls for display options."""
-        display_folder = self.viewer.gui.add_folder("Display Controls")
+        tab_group = self.viewer.gui.add_tab_group()
 
-        with display_folder:
-            self.frames_checkbox = self.viewer.gui.add_checkbox(
-                "Show Frames", initial_value=False
-            )
+        with tab_group.add_tab("Controls"):
+            self._create_selection_panel()
+            self._create_path_player()
+            self._create_graph_viewer_controls()
 
-        @self.frames_checkbox.on_update
-        def _on_frames_toggle(_):
-            self.displayFrames(self.frames_checkbox.value)
-
-        self._create_selection_panel()
-        self._create_path_player()
-        self._create_graph_viewer_controls()
+        with tab_group.add_tab("Display"):
+            self._create_visibility_toggles()
 
     def _create_selection_panel(self):
         """Create GUI panel for displaying selected object info."""
@@ -695,8 +711,8 @@ class Viewer(BaseVisualizer):
                         frame.position = M.translation * collision.meshScale
                         frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
 
-            if self._display.frames:
-                self.updateFrames()
+            self.updateFrames()
+            self.updateContactSurfaces()
 
     def updateFrames(self):
         """Update the position and orientation of all frames."""
@@ -738,18 +754,94 @@ class Viewer(BaseVisualizer):
 
     def displayFrames(self, visibility):
         """Set whether to display frames or not."""
-        self._display.frames = visibility
-
         if self.framesRootFrame is not None:
             self.framesRootFrame.visible = visibility
-
-        for frame in self.model.frames:
-            frame_name = self.framesRootNodeName + "/" + frame.name
-            if frame_name in self.viser_frames:
-                self.viser_frames[frame_name].visible = visibility
-
         if visibility:
             self.updateFrames()
+
+    def loadContactSurfaces(self, robot, color=(0.2, 0.8, 0.2, 0.5)):
+        """Load contact surfaces from a manipulation device.
+
+        Args:
+            robot: A pyhpp.manipulation.Device with contact surfaces
+            color: RGBA tuple for surface color (default: semi-transparent green)
+        """
+        if not hasattr(robot, "contactSurfaces"):
+            warnings.warn(
+                "Robot does not have contactSurfaces method. ",
+                UserWarning,
+            )
+            return
+
+        surfaces = robot.contactSurfaces()
+        if not surfaces:
+            return
+
+        contact_root = self.viewerRootNodeName + "/contact_surfaces"
+        self._contact_surfaces_root = self.viewer.scene.add_frame(
+            contact_root, show_axes=False, visible=False
+        )
+
+        for surface_name, surface_list in surfaces.items():
+            for idx, surface_data in enumerate(surface_list):
+                joint_name = surface_data["joint"]
+                points = surface_data["points"]
+
+                if len(points) < 3:
+                    continue
+
+                node_name = f"{contact_root}/{surface_name}_{idx}"
+                vertices = np.array(points, dtype=np.float32)
+                num_pts = len(vertices)
+
+                if num_pts == 3:
+                    faces = np.array([[0, 1, 2]], dtype=np.int32)
+                else:
+                    faces = self._triangulate_convex_polygon(num_pts)
+
+                try:
+                    mesh_handle = self.viewer.scene.add_mesh_simple(
+                        node_name,
+                        vertices,
+                        faces,
+                        color=color[:3],
+                        opacity=color[3],
+                        side="double",
+                    )
+                    self._contact_surface_frames[node_name] = mesh_handle
+                    self._contact_surface_joints[node_name] = joint_name
+                except Exception as e:
+                    warnings.warn(
+                        f"Failed to create contact surface {surface_name}: {e}",
+                        UserWarning,
+                    )
+
+    def _triangulate_convex_polygon(self, num_vertices):
+        """Triangulate a convex polygon using fan triangulation."""
+        faces = []
+        for i in range(1, num_vertices - 1):
+            faces.append([0, i, i + 1])
+        return np.array(faces, dtype=np.int32)
+
+    def displayContactSurfaces(self, visibility):
+        """Set whether to display contact surfaces or not."""
+        if self._contact_surfaces_root is not None:
+            self._contact_surfaces_root.visible = visibility
+
+    def updateContactSurfaces(self):
+        """Update contact surface positions based on current joint transforms."""
+        for node_name, mesh_handle in self._contact_surface_frames.items():
+            joint_name = self._contact_surface_joints.get(node_name)
+            if joint_name == "universe" or joint_name is None:
+                continue
+
+            try:
+                frame = self.model.getFrameId(joint_name)
+                M = self.data.oMf[frame]
+                mesh_handle.position = M.translation
+                mesh_handle.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
+            except (ValueError, KeyError):
+                pass
 
     def captureImage(self, w=None, h=None, client_id=None, transport_format="jpeg"):
         """Capture an image from the Viser viewer."""
@@ -854,6 +946,37 @@ class Viewer(BaseVisualizer):
         @self._graph_button.on_click
         def _on_show_graph_click(_):
             self._launch_graph_viewer()
+
+    def _create_visibility_toggles(self):
+        """Create checkboxes for toggling visibility of scene elements."""
+        vis_checkbox = self.viewer.gui.add_checkbox(
+            "Show Visuals", initial_value=self._display.visuals
+        )
+        col_checkbox = self.viewer.gui.add_checkbox(
+            "Show Collisions", initial_value=self._display.collisions
+        )
+        frames_checkbox = self.viewer.gui.add_checkbox(
+            "Show Frames", initial_value=False
+        )
+        contacts_checkbox = self.viewer.gui.add_checkbox(
+            "Show Contact Surfaces", initial_value=False
+        )
+
+        @vis_checkbox.on_update
+        def _(_):
+            self.displayVisuals(vis_checkbox.value)
+
+        @col_checkbox.on_update
+        def _(_):
+            self.displayCollisions(col_checkbox.value)
+
+        @frames_checkbox.on_update
+        def _(_):
+            self.displayFrames(frames_checkbox.value)
+
+        @contacts_checkbox.on_update
+        def _(_):
+            self.displayContactSurfaces(contacts_checkbox.value)
 
     def setProblem(self, problem):
         """Set Problem for graph viewer integration.
