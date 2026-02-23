@@ -41,7 +41,6 @@ class _PathPlayerState:
 class _DisplayState:
     collisions: bool = False
     visuals: bool = True
-    frames: bool = False
 
 
 @dataclass
@@ -231,9 +230,7 @@ class Viewer(BaseVisualizer):
                 show_axes=True,
                 axes_length=frame_axis_length,
                 axes_radius=frame_axis_radius,
-                visible=False,
             )
-        self._display.frames = False
 
         # Add display controls
         self._create_display_controls()
@@ -695,8 +692,7 @@ class Viewer(BaseVisualizer):
                         frame.position = M.translation * collision.meshScale
                         frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
 
-            if self._display.frames:
-                self.updateFrames()
+            self.updateFrames()
 
     def updateFrames(self):
         """Update the position and orientation of all frames."""
@@ -738,16 +734,8 @@ class Viewer(BaseVisualizer):
 
     def displayFrames(self, visibility):
         """Set whether to display frames or not."""
-        self._display.frames = visibility
-
         if self.framesRootFrame is not None:
             self.framesRootFrame.visible = visibility
-
-        for frame in self.model.frames:
-            frame_name = self.framesRootNodeName + "/" + frame.name
-            if frame_name in self.viser_frames:
-                self.viser_frames[frame_name].visible = visibility
-
         if visibility:
             self.updateFrames()
 
