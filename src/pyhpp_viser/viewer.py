@@ -1,6 +1,12 @@
+import logging
+import os
 import time
 import warnings
 from dataclasses import dataclass, field
+
+# Suppress GTK warnings
+os.environ.setdefault("GTK_MODULES", "")
+os.environ.setdefault("NO_AT_BRIDGE", "1")
 
 try:
     import hppfcl
@@ -18,6 +24,8 @@ try:
     import trimesh  # Required by viser
     import viser
 
+    # Suppress viser verbose logging
+    logging.getLogger("viser").setLevel(logging.WARNING)
 except ImportError:
     import_viser_succeed = False
 else:
@@ -189,9 +197,20 @@ class Viewer(BaseVisualizer):
         self.viewer = viewer or viser.ViserServer(host=host, server_port=port)
 
         if open:
-            import webbrowser
+            import subprocess
 
-            webbrowser.open(f"http://{self.viewer.get_host()}:{self.viewer.get_port()}")
+            url = f"http://{self.viewer.get_host()}:{self.viewer.get_port()}"
+            # Open browser with suppressed stderr to avoid GTK warnings
+            try:
+                subprocess.Popen(
+                    ["xdg-open", url],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception:
+                import webbrowser
+
+                webbrowser.open(url)
             while len(self.viewer.get_clients()) == 0:
                 time.sleep(0.1)
 
@@ -1010,20 +1029,12 @@ class Viewer(BaseVisualizer):
                 self.graph, self.problem, self._on_config_generated
             )
             thread.start()
-            print("Graph viewer launched in background thread")
-        except ImportError as e:
-            print(f"Error: Could not import pyhpp_plot: {e}")
-            print("Make sure hpp-plot is built and installed with Python bindings")
-        except Exception as e:
-            print(f"Error launching graph viewer: {e}")
-            import traceback
-
-            traceback.print_exc()
+        except Exception:
+            pass
 
     def _on_config_generated(self, config, label):
         """Called from graph viewer thread when config is generated."""
         self.display(config)
-        print(f"Displayed config: {label}")
 
     def playPath(self, path, speed=1):
         """
