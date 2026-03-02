@@ -62,6 +62,8 @@ class _SelectionState:
 class Viewer(BaseVisualizer):
     """A Pinocchio visualizer using Viser with Gepetto-GUI style hierarchy."""
 
+    _shared_server = None
+
     def __init__(self, robot, problem=None):
         if not import_viser_succeed:
             msg = (
@@ -118,7 +120,7 @@ class Viewer(BaseVisualizer):
             if hasattr(self, "viewer") and self.viewer is not None:
                 self.loadViewerModel()
             else:
-                self.initViewer(open=True, loadModel=True)
+                self.initViewer(loadModel=True)
         self.display(q)
 
     def getGeometryObjectNodeName(
@@ -164,7 +166,7 @@ class Viewer(BaseVisualizer):
                     frame_path, show_axes=False
                 )
 
-    def start(self, host="localhost", port="8000", open=True):
+    def start(self, host="localhost", port="8000", open=True, new_server=False):
         """Start the viewer, load the robot model, and open the browser.
 
         This is the recommended way to initialize the viewer:
@@ -175,8 +177,11 @@ class Viewer(BaseVisualizer):
             host: Server hostname (default: localhost)
             port: Server port (default: 8000)
             open: Open browser automatically (default: True)
+            new_server: Force a new ViserServer on a new port (default: False)
         """
-        self.initViewer(open=open, loadModel=True, host=host, port=port)
+        self.initViewer(
+            open=open, loadModel=True, host=host, port=port, new_server=new_server
+        )
 
     def initViewer(
         self,
@@ -185,32 +190,45 @@ class Viewer(BaseVisualizer):
         loadModel=False,
         host="localhost",
         port="8000",
+        new_server=False,
     ):
         """
         Start a new Viser server and client.
+
+        By default, all Viewer instances share the same ViserServer so the
+        browser URL (port) stays the same.  Pass ``new_server=True`` to force
+        a separate server on a new port (useful for side-by-side views).
+
+        Args:
+            viewer: An existing ViserServer instance, or None.
+            open: Open a browser tab automatically.
+            loadModel: Load the robot model immediately.
+            host: Server hostname.
+            port: Server port (only used for the first server).
+            new_server: If True, always create a new ViserServer on a new port.
         """
         if (viewer is not None) and (not isinstance(viewer, viser.ViserServer)):
             raise RuntimeError(
                 "'viewer' argument must be None or a valid ViserServer instance."
             )
 
-        self.viewer = viewer or viser.ViserServer(host=host, server_port=port)
+        if viewer is not None:
+            self.viewer = viewer
+        elif new_server:
+            self.viewer = viser.ViserServer(host=host, server_port=port)
+        elif Viewer._shared_server is not None:
+            self.viewer = Viewer._shared_server
+            # Clear previous scene and GUI so the new model loads cleanly
+            self.viewer.scene.reset()
+            self.viewer.gui.reset()
+        else:
+            self.viewer = viser.ViserServer(host=host, server_port=port)
+            Viewer._shared_server = self.viewer
 
         if open:
-            import subprocess
+            import webbrowser
 
-            url = f"http://{self.viewer.get_host()}:{self.viewer.get_port()}"
-            # Open browser with suppressed stderr to avoid GTK warnings
-            try:
-                subprocess.Popen(
-                    ["xdg-open", url],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except Exception:
-                import webbrowser
-
-                webbrowser.open(url)
+            webbrowser.open(f"http://{self.viewer.get_host()}:{self.viewer.get_port()}")
             while len(self.viewer.get_clients()) == 0:
                 time.sleep(0.1)
 
