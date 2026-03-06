@@ -52,7 +52,7 @@ include("${JRL_CMAKE_MODULES}/python.cmake")
 compute_project_args(PROJECT_ARGS LANGUAGES CXX)
 project(${PROJECT_NAME} ${PROJECT_ARGS})
 
-option(USE_HPP_PYTHON "Add dependency to hpp-python" OFF)
+option(USE_HPP_PYTHON "Add dependency to hpp-python" ON)
 
 add_project_dependency("hpp-corbaserver" REQUIRED)
 add_project_dependency("gepetto-viewer")
