@@ -25,7 +25,7 @@ macro(INSTALL_PYTHON_FILES MODULE)
   endforeach()
 endmacro()
 
-if (USE_CORBA)
+if(USE_CORBA)
   install_python_files("hpp/gepetto" path_player.py viewer.py viewer_factory.py
                        types.py __init__.py)
 
