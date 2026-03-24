@@ -25,18 +25,21 @@ macro(INSTALL_PYTHON_FILES MODULE)
   endforeach()
 endmacro()
 
-install_python_files("hpp/gepetto" path_player.py viewer.py viewer_factory.py
-                     types.py __init__.py)
+if(USE_CORBA)
+  install_python_files("hpp/gepetto" path_player.py viewer.py viewer_factory.py
+                       types.py __init__.py)
 
-install_python_files("hpp/gepetto/blender" exportmotion.py __init__.py)
+  install_python_files("hpp/gepetto/blender" exportmotion.py __init__.py)
 
-install_python_files("hpp/gepetto/manipulation" viewer.py viewer_factory.py
-                     __init__.py)
+  install_python_files("hpp/gepetto/manipulation" viewer.py viewer_factory.py
+                       __init__.py)
 
-install_python_files("hpp/gepetto/gui" path_graph.py __init__.py)
+  install_python_files("hpp/gepetto/gui" path_graph.py __init__.py)
 
-if(gepetto-viewer_FOUND)
-  gepetto_gui_pyplugin("hpp/gepetto/gui/path_graph.py")
+  if(gepetto-viewer_FOUND)
+    gepetto_gui_pyplugin("hpp/gepetto/gui/path_graph.py")
+  endif()
+
 endif()
 
 if(USE_HPP_PYTHON)

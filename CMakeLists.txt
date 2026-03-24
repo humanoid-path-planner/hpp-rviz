@@ -53,9 +53,13 @@ compute_project_args(PROJECT_ARGS LANGUAGES CXX)
 project(${PROJECT_NAME} ${PROJECT_ARGS})
 
 option(USE_HPP_PYTHON "Add dependency to hpp-python" ON)
+option(USE_CORBA "Enable dependency to hpp-manipulation-corba" OFF)
 
-add_project_dependency("hpp-corbaserver" REQUIRED)
-add_project_dependency("gepetto-viewer")
+if(USE_CORBA)
+  add_project_dependency("hpp-corbaserver" REQUIRED)
+  add_project_dependency("gepetto-viewer")
+endif()
+
 if(USE_HPP_PYTHON)
   add_project_dependency("hpp-python" REQUIRED)
 endif()
