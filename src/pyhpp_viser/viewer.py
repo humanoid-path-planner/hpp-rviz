@@ -305,9 +305,7 @@ class Viewer(BaseVisualizer):
 
         for frame in self.model.frames:
             group = _FRAME_TYPE_GROUPS.get(frame.type, "other")
-            frame_path = (
-                self.framesRootNodeName + "/" + group + "/" + frame.name
-            )
+            frame_path = self.framesRootNodeName + "/" + group + "/" + frame.name
             self.viser_frames[frame_path] = self.viewer.scene.add_frame(
                 frame_path,
                 show_axes=True,
@@ -784,9 +782,7 @@ class Viewer(BaseVisualizer):
         for frame_id, frame in enumerate(self.model.frames):
             M = self.data.oMf[frame_id]
             group = _FRAME_TYPE_GROUPS.get(frame.type, "other")
-            viser_frame_name = (
-                self.framesRootNodeName + "/" + group + "/" + frame.name
-            )
+            viser_frame_name = self.framesRootNodeName + "/" + group + "/" + frame.name
             if viser_frame_name in self.viser_frames:
                 viser_frame = self.viser_frames[viser_frame_name]
                 viser_frame.position = M.translation
