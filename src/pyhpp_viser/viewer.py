@@ -34,6 +34,14 @@ else:
 
 MESH_TYPES = (hppfcl.BVHModelBase, hppfcl.HeightFieldOBBRSS, hppfcl.HeightFieldAABB)
 
+_FRAME_TYPE_GROUPS = {
+    pin.FrameType.OP_FRAME: "op_frames",
+    pin.FrameType.JOINT: "joints",
+    pin.FrameType.FIXED_JOINT: "fixed_joints",
+    pin.FrameType.BODY: "bodies",
+    pin.FrameType.SENSOR: "sensors",
+}
+
 
 @dataclass
 class _PathPlayerState:
@@ -99,6 +107,8 @@ class Viewer(BaseVisualizer):
         self.viewerRootNodeName = None
         self.framesRootNodeName = None
         self.framesRootFrame = None
+        self._frame_type_roots = {}
+        self._kinematic_frames = {}  # {viser_path: frame_name}
         self._viewer_initialized = False
 
         self.problem = problem
@@ -280,14 +290,29 @@ class Viewer(BaseVisualizer):
             self.framesRootNodeName, show_axes=False, visible=False
         )
 
+        # Group frames by type for selective display in scene tree
+        self._frame_type_roots = {}
+        self._kinematic_frames = {}
+        types_present = {
+            _FRAME_TYPE_GROUPS.get(f.type, "other") for f in self.model.frames
+        }
+        for group in sorted(types_present):
+            group_path = self.framesRootNodeName + "/" + group
+            self._frame_type_roots[group] = self.viewer.scene.add_frame(
+                group_path, show_axes=False
+            )
+            self.viser_frames[group_path] = self._frame_type_roots[group]
+
         for frame in self.model.frames:
-            frame_name = self.framesRootNodeName + "/" + frame.name
-            self.viser_frames[frame_name] = self.viewer.scene.add_frame(
-                frame_name,
+            group = _FRAME_TYPE_GROUPS.get(frame.type, "other")
+            frame_path = self.framesRootNodeName + "/" + group + "/" + frame.name
+            self.viser_frames[frame_path] = self.viewer.scene.add_frame(
+                frame_path,
                 show_axes=True,
                 axes_length=frame_axis_length,
                 axes_radius=frame_axis_radius,
             )
+            self._kinematic_frames[frame_path] = frame.name
 
         # Auto-load contact surfaces if the robot supports them
         if hasattr(self._robot, "contactSurfaces"):
@@ -755,11 +780,9 @@ class Viewer(BaseVisualizer):
         """Update the position and orientation of all frames."""
         pin.updateFramePlacements(self.model, self.data)
         for frame_id, frame in enumerate(self.model.frames):
-            # Get frame pose
             M = self.data.oMf[frame_id]
-
-            # Update viewer configuration
-            viser_frame_name = self.framesRootNodeName + "/" + frame.name
+            group = _FRAME_TYPE_GROUPS.get(frame.type, "other")
+            viser_frame_name = self.framesRootNodeName + "/" + group + "/" + frame.name
             if viser_frame_name in self.viser_frames:
                 viser_frame = self.viser_frames[viser_frame_name]
                 viser_frame.position = M.translation
@@ -790,9 +813,18 @@ class Viewer(BaseVisualizer):
                 frame.visible = visibility
 
     def displayFrames(self, visibility):
-        """Set whether to display frames or not."""
+        """Set whether to display frames or not.
+
+        Explicitly sets visibility on all hierarchy levels (root, type groups,
+        individual frames) so that prior scene tree interactions are overridden.
+        """
         if self.framesRootFrame is not None:
             self.framesRootFrame.visible = visibility
+        for root in self._frame_type_roots.values():
+            root.visible = visibility
+        for path in self._kinematic_frames:
+            if path in self.viser_frames:
+                self.viser_frames[path].visible = visibility
         if visibility:
             self.updateFrames()
 
@@ -995,20 +1027,25 @@ class Viewer(BaseVisualizer):
         frames_checkbox = self.viewer.gui.add_checkbox(
             "Show Frames", initial_value=False
         )
-        frame_length_slider = self.viewer.gui.add_slider(
-            "Frame Axes Length",
-            min=0.01,
-            max=1.0,
-            step=0.01,
-            initial_value=0.1,
-        )
-        frame_radius_slider = self.viewer.gui.add_slider(
-            "Frame Axes Radius",
-            min=0.001,
-            max=0.05,
-            step=0.001,
-            initial_value=0.003,
-        )
+        frames_folder = self.viewer.gui.add_folder("Frame Options")
+        with frames_folder:
+            frame_filter = self.viewer.gui.add_text(
+                "Filter", initial_value="", hint="Filter frames by name"
+            )
+            frame_length_slider = self.viewer.gui.add_slider(
+                "Axes Length",
+                min=0.01,
+                max=1.0,
+                step=0.01,
+                initial_value=0.1,
+            )
+            frame_radius_slider = self.viewer.gui.add_slider(
+                "Axes Radius",
+                min=0.001,
+                max=0.05,
+                step=0.001,
+                initial_value=0.003,
+            )
         contacts_checkbox = self.viewer.gui.add_checkbox(
             "Show Contact Surfaces", initial_value=False
         )
@@ -1025,12 +1062,24 @@ class Viewer(BaseVisualizer):
         def _(_):
             self.displayFrames(frames_checkbox.value)
 
+        @frame_filter.on_update
+        def _(_):
+            # Reset hierarchy visibility so scene tree toggles don't block
+            for root in self._frame_type_roots.values():
+                root.visible = True
+            pattern = frame_filter.value.lower()
+            for path, name in self._kinematic_frames.items():
+                if path in self.viser_frames:
+                    self.viser_frames[path].visible = (
+                        not pattern or pattern in name.lower()
+                    )
+
         def _update_frame_axes(_):
             length = frame_length_slider.value
             radius = frame_radius_slider.value
-            for name, handle in self.viser_frames.items():
-                if name.startswith(self.framesRootNodeName + "/"):
-                    handle.show_axes = True
+            for path in self._kinematic_frames:
+                if path in self.viser_frames:
+                    handle = self.viser_frames[path]
                     handle.axes_length = length
                     handle.axes_radius = radius
 
