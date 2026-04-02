@@ -240,8 +240,8 @@ class Viewer(BaseVisualizer):
         rootNodeName="pinocchio",
         collision_color=None,
         visual_color=None,
-        frame_axis_length=0.2,
-        frame_axis_radius=0.01,
+        frame_axis_length=0.1,
+        frame_axis_radius=0.003,
     ):
         """Load the robot in a Viser viewer with Gepetto-GUI style hierarchy."""
         self.viewerRootNodeName = rootNodeName
@@ -995,6 +995,20 @@ class Viewer(BaseVisualizer):
         frames_checkbox = self.viewer.gui.add_checkbox(
             "Show Frames", initial_value=False
         )
+        frame_length_slider = self.viewer.gui.add_slider(
+            "Frame Axes Length",
+            min=0.01,
+            max=1.0,
+            step=0.01,
+            initial_value=0.1,
+        )
+        frame_radius_slider = self.viewer.gui.add_slider(
+            "Frame Axes Radius",
+            min=0.001,
+            max=0.05,
+            step=0.001,
+            initial_value=0.003,
+        )
         contacts_checkbox = self.viewer.gui.add_checkbox(
             "Show Contact Surfaces", initial_value=False
         )
@@ -1010,6 +1024,18 @@ class Viewer(BaseVisualizer):
         @frames_checkbox.on_update
         def _(_):
             self.displayFrames(frames_checkbox.value)
+
+        def _update_frame_axes(_):
+            length = frame_length_slider.value
+            radius = frame_radius_slider.value
+            for name, handle in self.viser_frames.items():
+                if name.startswith(self.framesRootNodeName + "/"):
+                    handle.show_axes = True
+                    handle.axes_length = length
+                    handle.axes_radius = radius
+
+        frame_length_slider.on_update(_update_frame_axes)
+        frame_radius_slider.on_update(_update_frame_axes)
 
         @contacts_checkbox.on_update
         def _(_):
