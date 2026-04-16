@@ -935,6 +935,12 @@ class Viewer(BaseVisualizer):
 
     def loadPath(self, path, name=None):
         """Load a path into the path player dropdown."""
+        if not self._viewer_initialized:
+            if hasattr(self, "viewer") and self.viewer is not None:
+                self.loadViewerModel()
+            else:
+                self.initViewer(loadModel=True)
+
         if name is None:
             name = f"Path {self._path_player.counter}"
         self._path_player.counter += 1
