@@ -110,6 +110,7 @@ class Viewer(BaseVisualizer):
         self._frame_type_roots = {}
         self._kinematic_frames = {}  # {viser_path: frame_name}
         self._viewer_initialized = False
+        self.start_qt_viewer = False
 
         self.problem = problem
         self.graph = None
@@ -123,6 +124,8 @@ class Viewer(BaseVisualizer):
         self._contact_surface_frames = {}
         self._contact_surface_joints = {}
         self._contact_surfaces_root = None
+        self._graph_thread = None
+        self._last_config = None
 
     def __call__(self, q):
         """Allow calling viewer as v(q) for compatibility with Gepetto-GUI."""
@@ -1097,6 +1100,7 @@ class Viewer(BaseVisualizer):
             problem: PyWProblem from pyhpp.manipulation
         """
         self.problem = problem
+        self._publish_viewer_snapshot()
 
     def setGraph(self, graph):
         """Set constraint graph for graph viewer integration.
@@ -1105,6 +1109,22 @@ class Viewer(BaseVisualizer):
             graph: PyWGraph from pyhpp.manipulation
         """
         self.graph = graph
+        self._publish_viewer_snapshot()
+
+    def setQtGraphViewer(self, choice=True):
+        """Set whether to start the Qt-based graph viewer instead of the React-based one.
+
+        Args:
+            choice: If True, start the Qt viewer. If False, start the React viewer. Default is True.
+        """
+        self.start_qt_viewer = choice
+
+    def _publish_viewer_snapshot(self):
+        """Send the current graph/problem snapshot to the React app if available."""
+        if self._graph_thread is None or not self._graph_thread.is_alive():
+            print("Graph viewer thread not running, cannot publish viewer snapshot.")
+            return
+        self._graph_thread.send_viewer_snapshot(self.graph, self.problem)
 
     def _launch_graph_viewer(self):
         """Launch hpp-plot graph viewer in separate thread."""
@@ -1116,17 +1136,28 @@ class Viewer(BaseVisualizer):
             return
 
         try:
+            if self._graph_thread is not None and self._graph_thread.is_alive():
+                print("Graph viewer thread is already running")
+                return
             from pyhpp_plot import GraphViewerThread
 
             thread = GraphViewerThread(
-                self.graph, self.problem, self._on_config_generated
+                self.graph,
+                self.problem,
+                self._on_config_generated,
+                ws_host="127.0.0.1",
+                ws_port=8765,
+                start_qt_viewer=self.start_qt_viewer,
             )
+            self._graph_thread = thread
             thread.start()
-        except Exception:
+        except Exception as exc:
+            print(f"Failed to launch graph viewer: {exc}")
             pass
 
     def _on_config_generated(self, config, label):
         """Called from graph viewer thread when config is generated."""
+        self._last_config = config
         self.display(config)
 
     def playPath(self, path, speed=1):
