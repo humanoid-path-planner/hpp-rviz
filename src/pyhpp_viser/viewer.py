@@ -1110,7 +1110,7 @@ class Viewer(BaseVisualizer):
             problem: PyWProblem from pyhpp.manipulation
         """
         self.problem = problem
-        self._publish_viewer_snapshot()
+        self._publish_viewer_snapshot(None, self.problem)
 
     def setGraph(self, graph):
         """Set constraint graph for graph viewer integration.
@@ -1119,7 +1119,7 @@ class Viewer(BaseVisualizer):
             graph: PyWGraph from pyhpp.manipulation
         """
         self.graph = graph
-        self._publish_viewer_snapshot()
+        self._publish_viewer_snapshot(self.graph, None)
 
     def setupReactGraphViewer(self, port: int, host: str = "localhost"):
         """Set the port for the React-based graph viewer.
@@ -1149,12 +1149,12 @@ class Viewer(BaseVisualizer):
         """
         self.start_qt_viewer = choice
 
-    def _publish_viewer_snapshot(self):
+    def _publish_viewer_snapshot(self, graph=None, problem=None):
         """Send the current graph/problem snapshot to the React app if available."""
         if self._graph_thread is None or not self._graph_thread.is_alive():
             print("Graph viewer thread not running, cannot publish viewer snapshot.")
             return
-        self._graph_thread.send_viewer_snapshot(self.graph, self.problem)
+        self._graph_thread.send_viewer_snapshot(graph, problem)
 
     def _launch_graph_viewer(self):
         """Launch hpp-plot graph viewer in separate thread."""
