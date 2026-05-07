@@ -20,7 +20,6 @@ import pinocchio as pin
 from pinocchio.visualize import BaseVisualizer
 
 try:
-    import collada
     import trimesh  # Required by viser
     import viser
 
@@ -146,8 +145,8 @@ class Viewer(BaseVisualizer):
             msg = (
                 "Error while importing the viewer client.\n"
                 "Check whether viser and its dependencies are properly installed.\n"
-                "Required packages: viser, trimesh, collada\n"
-                "Install with: pip install --user viser trimesh pycollada"
+                "Required packages: viser, trimesh\n"
+                "Install with: pip install --user viser trimesh"
             )
             raise ImportError(msg)
 
@@ -1033,20 +1032,10 @@ class Viewer(BaseVisualizer):
                 "geometry_type": geometry_type,
             }
 
-            # Handle both single frame and list of frames (for multi-geometry COLLADA)
-            if isinstance(frame, list):
-                frames = []
-                for i, f in enumerate(frame):
-                    indexed_name = f"{node_name}_{i}"
-                    self.viser_frames[indexed_name] = f
-                    self._node_to_geom_info[indexed_name] = geom_info
-                    self._register_click_callback(f, node_name)
-                    frames.append(f)
-            else:
-                frames = [frame]
-                self.viser_frames[node_name] = frame
-                self._node_to_geom_info[node_name] = geom_info
-                self._register_click_callback(frame, node_name)
+            frames = [frame]
+            self.viser_frames[node_name] = frame
+            self._node_to_geom_info[node_name] = geom_info
+            self._register_click_callback(frame, node_name)
 
             self._node_to_geom_info[node_name] = geom_info
             self._geometry_frames[node_name] = frames
@@ -1083,76 +1072,6 @@ class Viewer(BaseVisualizer):
         return self._load_standard_mesh(
             name, mesh_path, color, use_embedded_colors, scale=scale
         )
-
-    def _load_collada_mesh(self, name, mesh_path, color):
-        """Load a COLLADA mesh with color support."""
-        try:
-            mesh_collada = collada.Collada(mesh_path)
-        except collada.DaeError:
-            return self._load_standard_mesh(name, mesh_path, color)
-
-        if len(mesh_collada.effects) < len(mesh_collada.geometries):
-            return self._load_standard_mesh(name, mesh_path, color)
-
-        frames = []
-        for i, (geometry, effect) in enumerate(
-            zip(mesh_collada.geometries, mesh_collada.effects)
-        ):
-            frame = self._process_collada_geometry(
-                name, i, geometry, effect, color, mesh_path
-            )
-            if frame:
-                frames.append(frame)
-
-        # Return all frames as a list so they can all be tracked
-        return frames if frames else None
-
-    def _process_collada_geometry(
-        self, name, index, geometry, effect, fallback_color, mesh_path
-    ):
-        """Process a single COLLADA geometry with its material."""
-        indexed_name = f"{name}_{index}"
-
-        try:
-            vertices, faces = self._extract_geometry_data(geometry)
-        except (AttributeError, IndexError, KeyError):
-            # Fallback if geometry data extraction fails
-            mesh = trimesh.load_mesh(mesh_path)
-            return self.viewer.scene.add_mesh_trimesh(indexed_name, mesh)
-
-        mesh_color = getattr(effect, "diffuse", None)
-
-        if mesh_color is not None:
-            return self.viewer.scene.add_mesh_simple(
-                indexed_name,
-                vertices,
-                faces,
-                color=mesh_color[:3],
-                opacity=mesh_color[3],
-            )
-        elif fallback_color is not None:
-            return self.viewer.scene.add_mesh_simple(
-                indexed_name,
-                vertices,
-                faces,
-                color=fallback_color[:3],
-                opacity=fallback_color[3],
-            )
-        else:
-            mesh = trimesh.load_mesh(mesh_path)
-            return self.viewer.scene.add_mesh_trimesh(indexed_name, mesh)
-
-    def _extract_geometry_data(self, geometry):
-        """Extract vertices and faces from a COLLADA geometry."""
-        vertices = geometry.primitives[0].sources["VERTEX"][0][4].data
-        indices = geometry.primitives[0].indices
-
-        if indices.ndim == 3:
-            faces = indices[:, :, 0]
-        else:
-            faces = indices.reshape(-1, 3)
-
-        return vertices, faces
 
     def _load_standard_mesh(
         self, name, mesh_path, color, use_embedded_colors, scale=None

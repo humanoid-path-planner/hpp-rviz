@@ -2,7 +2,6 @@
 dependencies = [
   "numpy",
   "pin",
-  "pycollada",
   "trimesh",
   "viser",
   "websockets"
