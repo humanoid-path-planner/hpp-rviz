@@ -832,7 +832,9 @@ class Viewer(BaseVisualizer):
 
         self._create_hierarchy_nodes([*group["parent_names"], "visual_batch"])
 
-        batch_name = f"{group['parent_path']}/visual_batch_{group['kind']}_{batch_index}"
+        batch_name = (
+            f"{group['parent_path']}/visual_batch_{group['kind']}_{batch_index}"
+        )
         color = group["color"]
         if group["kind"] in ("simple", "mesh_simple"):
             mesh = group["mesh_source"]
@@ -1425,7 +1427,9 @@ class Viewer(BaseVisualizer):
             )
         self._profile_since(f"{label}.total", total_start)
 
-    def _update_batched_geometry_frames(self, geom_data, batched_geometry_frames, label):
+    def _update_batched_geometry_frames(
+        self, geom_data, batched_geometry_frames, label
+    ):
         total_entries = 0
         queued_batches = 0
         skipped_batches = 0
@@ -1439,9 +1443,7 @@ class Viewer(BaseVisualizer):
             for index, geom_id in enumerate(batch.geom_ids):
                 M = geom_data.oMg[geom_id]
                 batch.positions[index] = M.translation * batch.mesh_scales[index]
-                batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[
-                    [3, 0, 1, 2]
-                ]
+                batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
         self._profile_since(f"{label}.batched_geometry.fill_arrays", fill_start)
 
         queue_start = self._profile_start()
@@ -1477,9 +1479,7 @@ class Viewer(BaseVisualizer):
             for index, frame_id in enumerate(batch.frame_ids):
                 M = self.data.oMf[frame_id]
                 batch.positions[index] = M.translation
-                batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[
-                    [3, 0, 1, 2]
-                ]
+                batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
             self._profile_since(f"frames.{batch.group}.fill_arrays", fill_start)
 
             positions_start = self._profile_start()
@@ -1542,9 +1542,7 @@ class Viewer(BaseVisualizer):
         for batch in self._frame_batches.values():
             if self._frame_filter_pattern:
                 batch.scales[:] = [
-                    1.0
-                    if self._frame_filter_pattern in name.lower()
-                    else 0.0
+                    1.0 if self._frame_filter_pattern in name.lower() else 0.0
                     for name in batch.frame_names
                 ]
             else:
