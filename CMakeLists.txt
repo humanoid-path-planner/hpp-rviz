@@ -62,6 +62,11 @@ project(${PROJECT_NAME} ${PROJECT_ARGS})
 
 option(USE_HPP_PYTHON "Add dependency to hpp-python" ON)
 option(USE_CORBA "Enable dependency to hpp-manipulation-corba" OFF)
+option(
+    BUILD_HPP_RVIZ_PKGS
+    "Build hpp_msgs and hpp_ros_vizualisation with colcon"
+    OFF
+)
 
 if(USE_CORBA)
     add_project_dependency("hpp-corbaserver" REQUIRED)
@@ -70,6 +75,13 @@ endif()
 
 if(USE_HPP_PYTHON)
     add_project_dependency("hpp-python" REQUIRED)
+endif()
+
+if(BUILD_HPP_RVIZ_PKGS)
+    execute_process(
+        COMMAND colcon build
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/hpp_rviz_pkg
+    )
 endif()
 
 if(NOT FINDPYTHON_ALREADY_CALLED)
