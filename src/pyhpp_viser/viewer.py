@@ -100,6 +100,24 @@ class _GeometryFrameState:
 
 
 @dataclass
+class _BatchedGeometryEntry:
+    geom_id: int
+    geometry_object: object
+    node_name: str
+
+
+@dataclass
+class _BatchedGeometryState:
+    name: str
+    handle: object
+    entries: list
+    positions: np.ndarray
+    wxyzs: np.ndarray
+    last_positions: object = None
+    last_wxyzs: object = None
+
+
+@dataclass
 class _ProfilerEntry:
     total: float = 0.0
     count: int = 0
@@ -162,6 +180,7 @@ class Viewer(BaseVisualizer):
         self._frame_filter_pattern = ""
         self._geometry_frames = {}  # {base geometry path: [viser handles]}
         self._visual_geometry_frames = []
+        self._visual_batched_geometry_frames = []
         self._collision_geometry_frames = []
         self._profiler = _ProfilerState()
         self._viewer_initialized = False
@@ -320,6 +339,7 @@ class Viewer(BaseVisualizer):
         self._viewer_initialized = True
         self._geometry_frames = {}
         self._visual_geometry_frames = []
+        self._visual_batched_geometry_frames = []
         self._collision_geometry_frames = []
         self._contact_surface_frames = {}
         self._contact_surface_joints = {}
@@ -339,10 +359,7 @@ class Viewer(BaseVisualizer):
         if (visual_color is not None) and (len(visual_color) != 4):
             raise RuntimeError("visual_color must have 4 elements for RGBA.")
         if self.visual_model is not None:
-            for visual in self.visual_model.geometryObjects:
-                self.loadViewerGeometryObject(
-                    visual, pin.GeometryType.VISUAL, visual_color
-                )
+            self._load_visual_geometry_objects(visual_color)
         self.displayVisuals(True)
 
         # Load collision model
@@ -527,6 +544,16 @@ class Viewer(BaseVisualizer):
                 return
             self._select_frame(batch, frame_index)
 
+    def _register_batched_geometry_click_callback(self, batch):
+        """Register a click callback on a batched geometry handle."""
+
+        @batch.handle.on_click
+        def _on_batched_geometry_click(event):
+            instance_index = event.instance_index
+            if instance_index is None or instance_index >= len(batch.entries):
+                return
+            self._select_node(batch.entries[instance_index].node_name)
+
     def _select_frame(self, batch, frame_index):
         frame_id = batch.frame_ids[frame_index]
         frame_name = batch.frame_names[frame_index]
@@ -616,14 +643,172 @@ class Viewer(BaseVisualizer):
         for client in clients.values():
             client.camera.look_at = position
 
-    def loadViewerGeometryObject(self, geometry_object, geometry_type, color=None):
-        """Load a single geometry object with hierarchical naming."""
-        node_name = self.getGeometryObjectNodeName(
-            geometry_object, geometry_type, create_groups=True
+    def _load_visual_geometry_objects(self, visual_color):
+        """Load visual objects, batching repeated simple primitives when possible."""
+        batched_groups = {}
+        fallback_objects = []
+        for visual in self.visual_model.geometryObjects:
+            batch_spec = self._make_visual_batch_spec(visual, visual_color)
+            if batch_spec is None:
+                fallback_objects.append(visual)
+                continue
+
+            key, mesh_source, primitive_color, flat_shading, batch_kind = batch_spec
+            group = batched_groups.setdefault(
+                key,
+                {
+                    "kind": batch_kind,
+                    "mesh_source": mesh_source,
+                    "color": primitive_color,
+                    "flat_shading": flat_shading,
+                    "objects": [],
+                },
+            )
+            group["objects"].append(visual)
+
+        for index, group in enumerate(batched_groups.values()):
+            objects = group["objects"]
+            if len(objects) < 2:
+                fallback_objects.extend(objects)
+                continue
+            if not self._load_batched_visual_geometry(index, group):
+                fallback_objects.extend(objects)
+
+        for visual in fallback_objects:
+            self.loadViewerGeometryObject(visual, pin.GeometryType.VISUAL, visual_color)
+
+    def _make_visual_batch_spec(self, geometry_object, color):
+        """Return a batching key and mesh for simple visual primitives."""
+        primitive_color, color_override, use_embedded_colors = (
+            self._geometry_color_options(geometry_object, color)
         )
-
+        primitive_color = tuple(float(value) for value in primitive_color)
         geom = geometry_object.geometry
+        mesh_path = getattr(geometry_object, "meshPath", "")
 
+        if (
+            color_override is None
+            and use_embedded_colors
+            and len(mesh_path) > 0
+            and (isinstance(geom, MESH_TYPES) or isinstance(geom, hppfcl.Convex))
+        ):
+            real_mesh_path = os.path.realpath(mesh_path)
+            key = ("mesh_path", real_mesh_path)
+            return key, real_mesh_path, None, None, "trimesh"
+
+        if isinstance(geom, hppfcl.Box):
+            extents = tuple(float(value) for value in geom.halfSide * 2.0)
+            mesh = trimesh.creation.box(extents=extents)
+            primitive_key = ("box", extents)
+            flat_shading = True
+        elif isinstance(geom, hppfcl.Sphere):
+            radius = float(geom.radius)
+            mesh = trimesh.creation.icosphere(radius=radius)
+            primitive_key = ("sphere", radius)
+            flat_shading = False
+        elif isinstance(geom, hppfcl.Cylinder):
+            radius = float(geom.radius)
+            height = float(geom.halfLength * 2.0)
+            mesh = trimesh.creation.cylinder(radius=radius, height=height)
+            primitive_key = ("cylinder", radius, height)
+            flat_shading = False
+        elif isinstance(geom, hppfcl.Capsule):
+            radius = float(geom.radius)
+            height = float(geom.halfLength * 2.0)
+            mesh = trimesh.creation.capsule(radius=radius, height=height)
+            primitive_key = ("capsule", radius, height)
+            flat_shading = False
+        elif isinstance(geom, hppfcl.Cone):
+            radius = float(geom.radius)
+            height = float(geom.halfLength * 2.0)
+            mesh = trimesh.creation.cone(radius=radius, height=height)
+            primitive_key = ("cone", radius, height)
+            flat_shading = False
+        else:
+            return None
+
+        key = (primitive_key, primitive_color, flat_shading)
+        return key, mesh, primitive_color, flat_shading, "simple"
+
+    def _load_batched_visual_geometry(self, batch_index, group):
+        objects = group["objects"]
+        num_objects = len(objects)
+        positions = np.zeros((num_objects, 3), dtype=np.float32)
+        wxyzs = np.zeros((num_objects, 4), dtype=np.float32)
+        wxyzs[:, 0] = 1.0
+
+        batch_root = self.viewerRootNodeName + "/visual_batches"
+        if batch_root not in self.viser_frames:
+            self.viser_frames[batch_root] = self.viewer.scene.add_frame(
+                batch_root, show_axes=False
+            )
+
+        batch_name = f"{batch_root}/{group['kind']}_{batch_index}"
+        color = group["color"]
+        if group["kind"] == "simple":
+            mesh = group["mesh_source"]
+            handle = self.viewer.scene.add_batched_meshes_simple(
+                batch_name,
+                vertices=np.asarray(mesh.vertices, dtype=np.float32),
+                faces=np.asarray(mesh.faces, dtype=np.uint32),
+                batched_wxyzs=wxyzs,
+                batched_positions=positions,
+                batched_colors=color[:3],
+                opacity=color[3],
+                flat_shading=group["flat_shading"],
+                visible=self._display.visuals,
+            )
+        else:
+            try:
+                mesh = trimesh.load_mesh(group["mesh_source"])
+                handle = self.viewer.scene.add_batched_meshes_trimesh(
+                    batch_name,
+                    mesh=mesh,
+                    batched_wxyzs=wxyzs,
+                    batched_positions=positions,
+                    visible=self._display.visuals,
+                )
+            except Exception as exc:
+                warnings.warn(
+                    f"Failed to batch visual mesh {group['mesh_source']}: {exc}",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return False
+        self.viser_frames[batch_name] = handle
+
+        entries = []
+        for visual in objects:
+            node_name = self.getGeometryObjectNodeName(
+                visual, pin.GeometryType.VISUAL, create_groups=False
+            )
+            geom_info = {
+                "name": visual.name,
+                "type": "visual",
+                "geometry_type": pin.GeometryType.VISUAL,
+            }
+            self._node_to_geom_info[node_name] = geom_info
+            self._geometry_frames[node_name] = [handle]
+            entries.append(
+                _BatchedGeometryEntry(
+                    geom_id=self.visual_model.getGeometryId(visual.name),
+                    geometry_object=visual,
+                    node_name=node_name,
+                )
+            )
+
+        batch = _BatchedGeometryState(
+            name=batch_name,
+            handle=handle,
+            entries=entries,
+            positions=positions,
+            wxyzs=wxyzs,
+        )
+        self._visual_batched_geometry_frames.append(batch)
+        self._register_batched_geometry_click_callback(batch)
+        return True
+
+    def _geometry_color_options(self, geometry_object, color):
         if color is not None:
             color_override = color
             use_embedded_colors = False
@@ -634,10 +819,22 @@ class Viewer(BaseVisualizer):
             color_override = None
             use_embedded_colors = True
 
-        if use_embedded_colors:
-            primitive_color = (0.5, 0.5, 0.5, 1.0)
-        else:
-            primitive_color = color_override
+        primitive_color = (
+            (0.5, 0.5, 0.5, 1.0) if use_embedded_colors else color_override
+        )
+        return primitive_color, color_override, use_embedded_colors
+
+    def loadViewerGeometryObject(self, geometry_object, geometry_type, color=None):
+        """Load a single geometry object with hierarchical naming."""
+        node_name = self.getGeometryObjectNodeName(
+            geometry_object, geometry_type, create_groups=True
+        )
+
+        geom = geometry_object.geometry
+
+        primitive_color, color_override, use_embedded_colors = (
+            self._geometry_color_options(geometry_object, color)
+        )
 
         type_str = (
             "collision" if geometry_type == pin.GeometryType.COLLISION else "visual"
@@ -1086,6 +1283,7 @@ class Viewer(BaseVisualizer):
                     self.visual_data,
                     self._visual_geometry_frames,
                     "visuals",
+                    self._visual_batched_geometry_frames,
                 )
                 self._profile_since("display.visuals", visuals_start)
 
@@ -1119,7 +1317,14 @@ class Viewer(BaseVisualizer):
         self._profile_messages_since("display.queued_messages", messages_start)
         self._profile_since("display.total", display_start)
 
-    def _update_geometry_frames(self, geom_model, geom_data, geometry_frames, label):
+    def _update_geometry_frames(
+        self,
+        geom_model,
+        geom_data,
+        geometry_frames,
+        label,
+        batched_geometry_frames=None,
+    ):
         total_start = self._profile_start()
         pin_start = self._profile_start()
         pin.updateGeometryPlacements(self.model, self.data, geom_model, geom_data)
@@ -1165,7 +1370,57 @@ class Viewer(BaseVisualizer):
             f"{label}.skipped_geometry_entries", float(skipped_entries), "entries"
         )
         self._profile_since(f"{label}.queue_transforms", queue_start)
+        if batched_geometry_frames:
+            self._update_batched_geometry_frames(
+                geom_data, batched_geometry_frames, label
+            )
         self._profile_since(f"{label}.total", total_start)
+
+    def _update_batched_geometry_frames(self, geom_data, batched_geometry_frames, label):
+        total_entries = 0
+        changed_batches = 0
+        skipped_batches = 0
+        fill_start = self._profile_start()
+        for batch in batched_geometry_frames:
+            total_entries += len(batch.entries)
+            for index, entry in enumerate(batch.entries):
+                M = geom_data.oMg[entry.geom_id]
+                batch.positions[index] = M.translation * entry.geometry_object.meshScale
+                batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[
+                    [3, 0, 1, 2]
+                ]
+        self._profile_since(f"{label}.batched_geometry.fill_arrays", fill_start)
+
+        queue_start = self._profile_start()
+        for batch in batched_geometry_frames:
+            positions_changed = batch.last_positions is None or not np.array_equal(
+                batch.positions, batch.last_positions
+            )
+            wxyzs_changed = batch.last_wxyzs is None or not np.array_equal(
+                batch.wxyzs, batch.last_wxyzs
+            )
+            if not positions_changed and not wxyzs_changed:
+                skipped_batches += 1
+                continue
+
+            changed_batches += 1
+            if positions_changed:
+                batch.handle.batched_positions = batch.positions.copy()
+                batch.last_positions = batch.positions.copy()
+            if wxyzs_changed:
+                batch.handle.batched_wxyzs = batch.wxyzs.copy()
+                batch.last_wxyzs = batch.wxyzs.copy()
+
+        self._profile_value(
+            f"{label}.changed_batched_geometry", float(changed_batches), "batches"
+        )
+        self._profile_value(
+            f"{label}.skipped_batched_geometry", float(skipped_batches), "batches"
+        )
+        self._profile_value(
+            f"{label}.batched_geometry_entries", float(total_entries), "entries"
+        )
+        self._profile_since(f"{label}.queue_batched_transforms", queue_start)
 
     def updateFrames(self):
         """Update the position and orientation of all frames."""
