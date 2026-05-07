@@ -81,6 +81,23 @@ class _FrameBatchState:
     scales: np.ndarray
 
 
+@dataclass
+class _ProfilerEntry:
+    total: float = 0.0
+    count: int = 0
+    max: float = 0.0
+    unit: str = "ms"
+
+
+@dataclass
+class _ProfilerState:
+    enabled: bool = False
+    print_every: int = 0
+    reset_after_print: bool = False
+    animation_frames: int = 0
+    entries: dict = field(default_factory=dict)
+
+
 class Viewer(BaseVisualizer):
     """A Pinocchio visualizer using Viser with Gepetto-GUI style hierarchy."""
 
@@ -127,6 +144,7 @@ class Viewer(BaseVisualizer):
         self._geometry_frames = {}  # {base geometry path: [viser handles]}
         self._visual_geometry_frames = []
         self._collision_geometry_frames = []
+        self._profiler = _ProfilerState()
         self._viewer_initialized = False
         self.start_qt_viewer = False
         self._react_graph_viewer_port = 6789
@@ -866,31 +884,169 @@ class Viewer(BaseVisualizer):
 
         return frames
 
+    def enableProfiling(self, print_every=120, reset=True, reset_after_print=False):
+        """Enable lightweight playback/display timing diagnostics.
+
+        Args:
+            print_every: Print stats every N animation frames. Use 0 to disable
+                automatic printing and call printProfilingStats() manually.
+            reset: Clear previous accumulated stats.
+            reset_after_print: Clear stats after each automatic print.
+        """
+        if reset:
+            self.resetProfilingStats()
+        self._profiler.enabled = True
+        self._profiler.print_every = int(print_every)
+        self._profiler.reset_after_print = reset_after_print
+
+    def disableProfiling(self):
+        """Disable playback/display timing diagnostics."""
+        self._profiler.enabled = False
+
+    def resetProfilingStats(self):
+        """Clear accumulated profiling stats."""
+        self._profiler.entries.clear()
+        self._profiler.animation_frames = 0
+
+    def profilingStats(self):
+        """Return profiling stats as a nested dictionary."""
+        stats = {}
+        for name, entry in self._profiler.entries.items():
+            total = entry.total * 1000.0 if entry.unit == "ms" else entry.total
+            max_value = entry.max * 1000.0 if entry.unit == "ms" else entry.max
+            stats[name] = {
+                "count": entry.count,
+                "total": total,
+                "average": total / entry.count if entry.count else 0.0,
+                "max": max_value,
+                "unit": entry.unit,
+            }
+        return stats
+
+    def printProfilingStats(self, reset=False, limit=40):
+        """Print accumulated profiling stats sorted by total cost."""
+        print(self._formatProfilingStats(limit=limit))
+        if reset:
+            self.resetProfilingStats()
+
+    def _formatProfilingStats(self, limit=40):
+        entries = list(self._profiler.entries.items())
+        if not entries:
+            return "[pyhpp_viser profiler] no samples"
+
+        def sort_key(item):
+            name, entry = item
+            return (entry.unit != "ms", -entry.total, name)
+
+        lines = ["[pyhpp_viser profiler]"]
+        lines.append(
+            "name                                      count      total        avg        max"
+        )
+        lines.append("-" * 84)
+        for name, entry in sorted(entries, key=sort_key)[:limit]:
+            scale = 1000.0 if entry.unit == "ms" else 1.0
+            total = entry.total * scale
+            avg = total / entry.count if entry.count else 0.0
+            max_value = entry.max * scale
+            unit = "ms" if entry.unit == "ms" else entry.unit
+            lines.append(
+                f"{name:<40} {entry.count:>6} {total:>10.3f} "
+                f"{avg:>10.3f} {max_value:>10.3f} {unit}"
+            )
+        return "\n".join(lines)
+
+    def _profile_start(self):
+        return time.perf_counter() if self._profiler.enabled else None
+
+    def _profile_since(self, name, start):
+        if start is not None:
+            self._profile_value(name, time.perf_counter() - start, "ms")
+
+    def _profile_value(self, name, value, unit="ms"):
+        if not self._profiler.enabled:
+            return
+        entry = self._profiler.entries.get(name)
+        if entry is None:
+            entry = _ProfilerEntry(unit=unit)
+            self._profiler.entries[name] = entry
+        entry.total += value
+        entry.count += 1
+        entry.max = max(entry.max, value)
+
+    def _profile_message_counter(self):
+        if not self._profiler.enabled or not hasattr(self, "viewer"):
+            return None
+        try:
+            return self.viewer._websock_server._broadcast_buffer.message_counter
+        except AttributeError:
+            return None
+
+    def _profile_messages_since(self, name, start):
+        if start is None:
+            return
+        end = self._profile_message_counter()
+        if end is not None:
+            self._profile_value(name, float(end - start), "messages")
+
+    def _profile_animation_frame(self):
+        if not self._profiler.enabled:
+            return
+        self._profiler.animation_frames += 1
+        print_every = self._profiler.print_every
+        if print_every > 0 and self._profiler.animation_frames % print_every == 0:
+            self.printProfilingStats(reset=self._profiler.reset_after_print)
+
     def display(self, q=None):
         """Display the robot at configuration q."""
-        if q is not None:
-            pin.forwardKinematics(self.model, self.data, q)
+        display_start = self._profile_start()
+        messages_start = self._profile_message_counter()
 
+        if q is not None:
+            fk_start = self._profile_start()
+            pin.forwardKinematics(self.model, self.data, q)
+            self._profile_since("display.forward_kinematics", fk_start)
+
+        atomic_start = self._profile_start()
         with self.viewer.atomic():
             if self._display.visuals and self.visual_model is not None:
+                visuals_start = self._profile_start()
                 self._update_geometry_frames(
-                    self.visual_model, self.visual_data, self._visual_geometry_frames
+                    self.visual_model,
+                    self.visual_data,
+                    self._visual_geometry_frames,
+                    "visuals",
                 )
+                self._profile_since("display.visuals", visuals_start)
 
             if self._display.collisions and self.collision_model is not None:
+                collisions_start = self._profile_start()
                 self._update_geometry_frames(
                     self.collision_model,
                     self.collision_data,
                     self._collision_geometry_frames,
+                    "collisions",
                 )
+                self._profile_since("display.collisions", collisions_start)
 
             if self._display.frames:
+                frames_start = self._profile_start()
                 self.updateFrames()
+                self._profile_since("display.frames", frames_start)
             if self._display.contact_surfaces:
+                contacts_start = self._profile_start()
                 self.updateContactSurfaces()
+                self._profile_since("display.contact_surfaces", contacts_start)
+        self._profile_since("display.atomic_block", atomic_start)
+        self._profile_messages_since("display.queued_messages", messages_start)
+        self._profile_since("display.total", display_start)
 
-    def _update_geometry_frames(self, geom_model, geom_data, geometry_frames):
+    def _update_geometry_frames(self, geom_model, geom_data, geometry_frames, label):
+        total_start = self._profile_start()
+        pin_start = self._profile_start()
         pin.updateGeometryPlacements(self.model, self.data, geom_model, geom_data)
+        self._profile_since(f"{label}.update_geometry_placements", pin_start)
+
+        queue_start = self._profile_start()
         for geom_id, geometry_object, frames in geometry_frames:
             M = geom_data.oMg[geom_id]
             position = M.translation * geometry_object.meshScale
@@ -898,19 +1054,36 @@ class Viewer(BaseVisualizer):
             for frame in frames:
                 frame.position = position
                 frame.wxyz = wxyz
+        self._profile_since(f"{label}.queue_transforms", queue_start)
+        self._profile_since(f"{label}.total", total_start)
 
     def updateFrames(self):
         """Update the position and orientation of all frames."""
+        total_start = self._profile_start()
+        pin_start = self._profile_start()
         pin.updateFramePlacements(self.model, self.data)
+        self._profile_since("frames.update_frame_placements", pin_start)
+
         for batch in self._frame_batches.values():
+            fill_start = self._profile_start()
             for index, frame_id in enumerate(batch.frame_ids):
                 M = self.data.oMf[frame_id]
                 batch.positions[index] = M.translation
                 batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[
                     [3, 0, 1, 2]
                 ]
+            self._profile_since(f"frames.{batch.group}.fill_arrays", fill_start)
+
+            positions_start = self._profile_start()
             batch.handle.batched_positions = batch.positions.copy()
+            self._profile_since(
+                f"frames.{batch.group}.queue_positions", positions_start
+            )
+
+            wxyzs_start = self._profile_start()
             batch.handle.batched_wxyzs = batch.wxyzs.copy()
+            self._profile_since(f"frames.{batch.group}.queue_wxyzs", wxyzs_start)
+        self._profile_since("frames.total", total_start)
 
     def displayCollisions(self, visibility):
         """Set whether to display collision objects or not."""
@@ -1043,6 +1216,7 @@ class Viewer(BaseVisualizer):
 
     def updateContactSurfaces(self):
         """Update contact surface positions based on current joint transforms."""
+        total_start = self._profile_start()
         for node_name, mesh_handle in self._contact_surface_frames.items():
             joint_name = self._contact_surface_joints.get(node_name)
             if joint_name == "universe" or joint_name is None:
@@ -1051,10 +1225,13 @@ class Viewer(BaseVisualizer):
             try:
                 frame = self.model.getFrameId(joint_name)
                 M = self.data.oMf[frame]
+                queue_start = self._profile_start()
                 mesh_handle.position = M.translation
                 mesh_handle.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
+                self._profile_since("contacts.queue_transforms", queue_start)
             except (ValueError, KeyError):
                 pass
+        self._profile_since("contacts.total", total_start)
 
     def captureImage(self, w=None, h=None, client_id=None, transport_format="jpeg"):
         """Capture an image from the Viser viewer."""
@@ -1113,7 +1290,9 @@ class Viewer(BaseVisualizer):
             return
 
         def animate():
+            length_start = self._profile_start()
             path_length = self._path_player.current.length()
+            self._profile_since("animation.path_length", length_start)
             path_time = self.path_slider.value
             last_wall_time = time.perf_counter()
             slider_update_counter = 0
@@ -1128,25 +1307,36 @@ class Viewer(BaseVisualizer):
                 path_time += wall_dt * self.speed_slider.value
                 path_time = min(path_time, path_length)
 
+                eval_start = self._profile_start()
                 q, success = self._path_player.current.eval(path_time)
+                self._profile_since("animation.path_eval", eval_start)
 
                 if success:
+                    display_start = self._profile_start()
                     self.display(q)
+                    self._profile_since("animation.display", display_start)
 
                 slider_update_counter += 1
                 if slider_update_counter >= 10:
+                    slider_start = self._profile_start()
                     self._path_player.update_lock = True
                     self.path_slider.value = path_time
                     self._path_player.update_lock = False
                     slider_update_counter = 0
+                    self._profile_since("animation.slider_update", slider_start)
 
                 # Adaptive sleep
                 elapsed = time.perf_counter() - frame_start
+                self._profile_value("animation.frame_work", elapsed, "ms")
                 sleep_time = max(0, target_frame_time - elapsed)
                 if sleep_time > 0:
+                    sleep_start = self._profile_start()
                     time.sleep(sleep_time)
+                    self._profile_since("animation.sleep", sleep_start)
                 else:
+                    self._profile_value("animation.over_budget_frames", 1.0, "frames")
                     time.sleep(0)
+                self._profile_animation_frame()
 
             self._path_player.update_lock = True
             self.path_slider.value = 0.0 if path_time >= path_length else path_time
