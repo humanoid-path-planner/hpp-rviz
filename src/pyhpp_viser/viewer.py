@@ -859,7 +859,7 @@ class Viewer(BaseVisualizer):
             )
         else:
             try:
-                mesh = trimesh.load_mesh(group["mesh_source"])
+                mesh = self._load_mesh(group["mesh_source"])
                 handle = self.viewer.scene.add_batched_meshes_trimesh(
                     batch_name,
                     mesh=mesh,
@@ -908,7 +908,7 @@ class Viewer(BaseVisualizer):
         return True
 
     def _load_simple_batch_mesh(self, mesh_path):
-        mesh = trimesh.load_mesh(mesh_path)
+        mesh = self._load_mesh(mesh_path)
         if isinstance(mesh, trimesh.Scene):
             mesh = mesh.dump(concatenate=True)
         if not hasattr(mesh, "vertices") or not hasattr(mesh, "faces"):
@@ -1073,11 +1073,23 @@ class Viewer(BaseVisualizer):
             name, mesh_path, color, use_embedded_colors, scale=scale
         )
 
+    def _load_mesh(self, mesh_path):
+        try:
+            return trimesh.load_mesh(mesh_path)
+        except ImportError as exc:
+            if os.path.splitext(mesh_path)[1].lower() == ".dae":
+                msg = (
+                    f"Failed to load COLLADA mesh {mesh_path}. "
+                    "Install pycollada so trimesh can read .dae files."
+                )
+                raise ImportError(msg) from exc
+            raise
+
     def _load_standard_mesh(
         self, name, mesh_path, color, use_embedded_colors, scale=None
     ):
         """Load a mesh using trimesh, preserving embedded colors when requested."""
-        mesh = trimesh.load_mesh(mesh_path)
+        mesh = self._load_mesh(mesh_path)
         apply_scale = scale is not None and not np.allclose(scale, 1.0)
 
         if apply_scale:
