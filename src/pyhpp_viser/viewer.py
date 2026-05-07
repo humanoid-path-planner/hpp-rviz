@@ -82,6 +82,15 @@ class _FrameBatchState:
 
 
 @dataclass
+class _GeometryFrameState:
+    geom_id: int
+    geometry_object: object
+    frames: tuple
+    last_position: object = None
+    last_rotation: object = None
+
+
+@dataclass
 class _ProfilerEntry:
     total: float = 0.0
     count: int = 0
@@ -732,7 +741,9 @@ class Viewer(BaseVisualizer):
             )
             if geom_model is not None:
                 geom_id = geom_model.getGeometryId(geometry_object.name)
-                cached_entry = (geom_id, geometry_object, tuple(frames))
+                cached_entry = _GeometryFrameState(
+                    geom_id, geometry_object, tuple(frames)
+                )
                 if geometry_type == pin.GeometryType.COLLISION:
                     self._collision_geometry_frames.append(cached_entry)
                 else:
@@ -1047,13 +1058,44 @@ class Viewer(BaseVisualizer):
         self._profile_since(f"{label}.update_geometry_placements", pin_start)
 
         queue_start = self._profile_start()
-        for geom_id, geometry_object, frames in geometry_frames:
-            M = geom_data.oMg[geom_id]
-            position = M.translation * geometry_object.meshScale
-            wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
-            for frame in frames:
-                frame.position = position
-                frame.wxyz = wxyz
+        changed_entries = 0
+        skipped_entries = 0
+        for entry in geometry_frames:
+            M = geom_data.oMg[entry.geom_id]
+            position = M.translation * entry.geometry_object.meshScale
+            rotation = M.rotation
+
+            position_changed = entry.last_position is None or not np.array_equal(
+                position, entry.last_position
+            )
+            rotation_changed = entry.last_rotation is None or not np.array_equal(
+                rotation, entry.last_rotation
+            )
+            if not position_changed and not rotation_changed:
+                skipped_entries += 1
+                continue
+
+            changed_entries += 1
+            wxyz = None
+            if rotation_changed:
+                wxyz = pin.Quaternion(rotation).coeffs()[[3, 0, 1, 2]]
+
+            for frame in entry.frames:
+                if position_changed:
+                    frame.position = position
+                if rotation_changed:
+                    frame.wxyz = wxyz
+
+            if position_changed:
+                entry.last_position = position.copy()
+            if rotation_changed:
+                entry.last_rotation = rotation.copy()
+        self._profile_value(
+            f"{label}.changed_geometry_entries", float(changed_entries), "entries"
+        )
+        self._profile_value(
+            f"{label}.skipped_geometry_entries", float(skipped_entries), "entries"
+        )
         self._profile_since(f"{label}.queue_transforms", queue_start)
         self._profile_since(f"{label}.total", total_start)
 
