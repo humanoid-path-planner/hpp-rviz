@@ -62,6 +62,15 @@ class _DisplayState:
 
 
 @dataclass
+class _PlaybackUpdateRateState:
+    visuals_fps: float = 30.0
+    collisions_fps: float = 30.0
+    frames_fps: float = 30.0
+    contact_surfaces_fps: float = 30.0
+    last_updates: dict = field(default_factory=dict)
+
+
+@dataclass
 class _SelectionState:
     node_name: str | None = None
     frames: list = field(default_factory=list)
@@ -141,6 +150,7 @@ class Viewer(BaseVisualizer):
         )
         self.viser_frames = {}
         self._display = _DisplayState()
+        self._playback_update_rates = _PlaybackUpdateRateState()
         self._path_player = _PathPlayerState()
         self._selection = _SelectionState()
         self._node_to_geom_info = {}
@@ -1007,6 +1017,51 @@ class Viewer(BaseVisualizer):
         if print_every > 0 and self._profiler.animation_frames % print_every == 0:
             self.printProfilingStats(reset=self._profiler.reset_after_print)
 
+    def setPlaybackUpdateRates(
+        self,
+        visuals=None,
+        collisions=None,
+        frames=None,
+        contact_surfaces=None,
+    ):
+        """Set display update caps used only during path playback.
+
+        A value of 0 disables the cap for that display component.
+        """
+        updates = {
+            "visuals": visuals,
+            "collisions": collisions,
+            "frames": frames,
+            "contact_surfaces": contact_surfaces,
+        }
+        for component, value in updates.items():
+            if value is None:
+                continue
+            setattr(self._playback_update_rates, f"{component}_fps", float(value))
+            self._reset_playback_update_timer(component)
+
+    def _reset_playback_update_timer(self, component=None):
+        if component is None:
+            self._playback_update_rates.last_updates.clear()
+        else:
+            self._playback_update_rates.last_updates.pop(component, None)
+
+    def _should_update_display_component(self, component, now):
+        if not self._path_player.playing:
+            return True
+
+        fps = getattr(self._playback_update_rates, f"{component}_fps")
+        if fps <= 0:
+            return True
+
+        last_update = self._playback_update_rates.last_updates.get(component)
+        if last_update is None or now - last_update >= 1.0 / fps:
+            self._playback_update_rates.last_updates[component] = now
+            return True
+
+        self._profile_value(f"display.{component}_throttled", 1.0, "frames")
+        return False
+
     def display(self, q=None):
         """Display the robot at configuration q."""
         display_start = self._profile_start()
@@ -1017,9 +1072,14 @@ class Viewer(BaseVisualizer):
             pin.forwardKinematics(self.model, self.data, q)
             self._profile_since("display.forward_kinematics", fk_start)
 
+        update_time = time.perf_counter()
         atomic_start = self._profile_start()
         with self.viewer.atomic():
-            if self._display.visuals and self.visual_model is not None:
+            if (
+                self._display.visuals
+                and self.visual_model is not None
+                and self._should_update_display_component("visuals", update_time)
+            ):
                 visuals_start = self._profile_start()
                 self._update_geometry_frames(
                     self.visual_model,
@@ -1029,7 +1089,11 @@ class Viewer(BaseVisualizer):
                 )
                 self._profile_since("display.visuals", visuals_start)
 
-            if self._display.collisions and self.collision_model is not None:
+            if (
+                self._display.collisions
+                and self.collision_model is not None
+                and self._should_update_display_component("collisions", update_time)
+            ):
                 collisions_start = self._profile_start()
                 self._update_geometry_frames(
                     self.collision_model,
@@ -1039,11 +1103,15 @@ class Viewer(BaseVisualizer):
                 )
                 self._profile_since("display.collisions", collisions_start)
 
-            if self._display.frames:
+            if self._display.frames and self._should_update_display_component(
+                "frames", update_time
+            ):
                 frames_start = self._profile_start()
                 self.updateFrames()
                 self._profile_since("display.frames", frames_start)
-            if self._display.contact_surfaces:
+            if self._display.contact_surfaces and self._should_update_display_component(
+                "contact_surfaces", update_time
+            ):
                 contacts_start = self._profile_start()
                 self.updateContactSurfaces()
                 self._profile_since("display.contact_surfaces", contacts_start)
@@ -1130,6 +1198,8 @@ class Viewer(BaseVisualizer):
     def displayCollisions(self, visibility):
         """Set whether to display collision objects or not."""
         self._display.collisions = visibility
+        if visibility:
+            self._reset_playback_update_timer("collisions")
         if self.collision_model is None:
             return
 
@@ -1143,6 +1213,8 @@ class Viewer(BaseVisualizer):
     def displayVisuals(self, visibility):
         """Set whether to display visual objects or not."""
         self._display.visuals = visibility
+        if visibility:
+            self._reset_playback_update_timer("visuals")
         if self.visual_model is None:
             return
 
@@ -1158,6 +1230,8 @@ class Viewer(BaseVisualizer):
         and batched axes so that prior scene tree interactions are overridden.
         """
         self._display.frames = visibility
+        if visibility:
+            self._reset_playback_update_timer("frames")
         if self.framesRootFrame is not None:
             self.framesRootFrame.visible = visibility
         for root in self._frame_type_roots.values():
@@ -1251,6 +1325,8 @@ class Viewer(BaseVisualizer):
     def displayContactSurfaces(self, visibility):
         """Set whether to display contact surfaces or not."""
         self._display.contact_surfaces = visibility
+        if visibility:
+            self._reset_playback_update_timer("contact_surfaces")
         if self._contact_surfaces_root is not None:
             self._contact_surfaces_root.visible = visibility
         if visibility:
@@ -1332,6 +1408,7 @@ class Viewer(BaseVisualizer):
             return
 
         def animate():
+            self._reset_playback_update_timer()
             length_start = self._profile_start()
             path_length = self._path_player.current.length()
             self._profile_since("animation.path_length", length_start)
@@ -1439,6 +1516,36 @@ class Viewer(BaseVisualizer):
         contacts_checkbox = self.viewer.gui.add_checkbox(
             "Show Contact Surfaces", initial_value=False
         )
+        rates_folder = self.viewer.gui.add_folder("Playback Update Rates")
+        with rates_folder:
+            visual_rate_slider = self.viewer.gui.add_slider(
+                "Visual FPS",
+                min=0,
+                max=120,
+                step=5,
+                initial_value=self._playback_update_rates.visuals_fps,
+            )
+            collision_rate_slider = self.viewer.gui.add_slider(
+                "Collision FPS",
+                min=0,
+                max=120,
+                step=5,
+                initial_value=self._playback_update_rates.collisions_fps,
+            )
+            frame_rate_slider = self.viewer.gui.add_slider(
+                "Frame FPS",
+                min=0,
+                max=120,
+                step=5,
+                initial_value=self._playback_update_rates.frames_fps,
+            )
+            contact_rate_slider = self.viewer.gui.add_slider(
+                "Contact FPS",
+                min=0,
+                max=120,
+                step=5,
+                initial_value=self._playback_update_rates.contact_surfaces_fps,
+            )
 
         @vis_checkbox.on_update
         def _(_):
@@ -1469,6 +1576,22 @@ class Viewer(BaseVisualizer):
         @contacts_checkbox.on_update
         def _(_):
             self.displayContactSurfaces(contacts_checkbox.value)
+
+        @visual_rate_slider.on_update
+        def _(_):
+            self.setPlaybackUpdateRates(visuals=visual_rate_slider.value)
+
+        @collision_rate_slider.on_update
+        def _(_):
+            self.setPlaybackUpdateRates(collisions=collision_rate_slider.value)
+
+        @frame_rate_slider.on_update
+        def _(_):
+            self.setPlaybackUpdateRates(frames=frame_rate_slider.value)
+
+        @contact_rate_slider.on_update
+        def _(_):
+            self.setPlaybackUpdateRates(contact_surfaces=contact_rate_slider.value)
 
     def setProblem(self, problem):
         """Set Problem for graph viewer integration.
