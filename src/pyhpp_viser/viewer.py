@@ -67,6 +67,18 @@ class _SelectionState:
     frames: list = field(default_factory=list)
     geom_name: str | None = None
     geom_type: str | None = None
+    frame_id: int | None = None
+
+
+@dataclass
+class _FrameBatchState:
+    group: str
+    handle: object
+    frame_ids: list
+    frame_names: list
+    positions: np.ndarray
+    wxyzs: np.ndarray
+    scales: np.ndarray
 
 
 class Viewer(BaseVisualizer):
@@ -110,7 +122,8 @@ class Viewer(BaseVisualizer):
         self.framesRootNodeName = None
         self.framesRootFrame = None
         self._frame_type_roots = {}
-        self._kinematic_frames = {}  # {viser_path: frame_name}
+        self._frame_batches = {}
+        self._frame_filter_pattern = ""
         self._geometry_frames = {}  # {base geometry path: [viser handles]}
         self._visual_geometry_frames = []
         self._collision_geometry_frames = []
@@ -276,6 +289,8 @@ class Viewer(BaseVisualizer):
         self._contact_surfaces_root = None
         self._display.frames = False
         self._display.contact_surfaces = False
+        self._frame_batches = {}
+        self._frame_filter_pattern = ""
 
         # Create root frame
         if rootNodeName not in self.viser_frames:
@@ -310,29 +325,22 @@ class Viewer(BaseVisualizer):
             self.framesRootNodeName, show_axes=False, visible=False
         )
 
-        # Group frames by type for selective display in scene tree
+        # Group frames by type for selective display in scene tree.
         self._frame_type_roots = {}
-        self._kinematic_frames = {}
-        types_present = {
-            _FRAME_TYPE_GROUPS.get(f.type, "other") for f in self.model.frames
-        }
-        for group in sorted(types_present):
+        frames_by_group = {}
+        for frame_id, frame in enumerate(self.model.frames):
+            group = _FRAME_TYPE_GROUPS.get(frame.type, "other")
+            frames_by_group.setdefault(group, []).append((frame_id, frame.name))
+
+        for group, frames in sorted(frames_by_group.items()):
             group_path = self.framesRootNodeName + "/" + group
             self._frame_type_roots[group] = self.viewer.scene.add_frame(
                 group_path, show_axes=False
             )
             self.viser_frames[group_path] = self._frame_type_roots[group]
-
-        for frame in self.model.frames:
-            group = _FRAME_TYPE_GROUPS.get(frame.type, "other")
-            frame_path = self.framesRootNodeName + "/" + group + "/" + frame.name
-            self.viser_frames[frame_path] = self.viewer.scene.add_frame(
-                frame_path,
-                show_axes=True,
-                axes_length=frame_axis_length,
-                axes_radius=frame_axis_radius,
+            self._add_frame_batch(
+                group, group_path, frames, frame_axis_length, frame_axis_radius
             )
-            self._kinematic_frames[frame_path] = frame.name
 
         # Auto-load contact surfaces if the robot supports them
         if hasattr(self._robot, "contactSurfaces"):
@@ -340,6 +348,40 @@ class Viewer(BaseVisualizer):
 
         # Add display controls
         self._create_display_controls()
+
+    def _add_frame_batch(
+        self, group, group_path, frames, frame_axis_length, frame_axis_radius
+    ):
+        """Create one batched axes node for all kinematic frames of a type."""
+        num_frames = len(frames)
+        positions = np.zeros((num_frames, 3), dtype=np.float32)
+        wxyzs = np.zeros((num_frames, 4), dtype=np.float32)
+        wxyzs[:, 0] = 1.0
+        scales = np.ones((num_frames,), dtype=np.float32)
+        axes_path = group_path + "/axes"
+        handle = self.viewer.scene.add_batched_axes(
+            axes_path,
+            batched_wxyzs=wxyzs,
+            batched_positions=positions,
+            batched_scales=scales,
+            axes_length=frame_axis_length,
+            axes_radius=frame_axis_radius,
+            visible=False,
+        )
+        frame_ids = [frame_id for frame_id, _ in frames]
+        frame_names = [name for _, name in frames]
+        batch = _FrameBatchState(
+            group=group,
+            handle=handle,
+            frame_ids=frame_ids,
+            frame_names=frame_names,
+            positions=positions,
+            wxyzs=wxyzs,
+            scales=scales,
+        )
+        self._frame_batches[group] = batch
+        self.viser_frames[axes_path] = handle
+        self._register_frame_batch_click_callback(batch)
 
     def _create_display_controls(self):
         """Create GUI controls for display options."""
@@ -438,6 +480,33 @@ class Viewer(BaseVisualizer):
         def _on_mesh_click(_):
             self._select_node(node_name)
 
+    def _register_frame_batch_click_callback(self, batch):
+        """Register a click callback on a batched frame axes handle."""
+
+        @batch.handle.on_click
+        def _on_frame_click(event):
+            frame_index = event.instance_index
+            if frame_index is None or frame_index >= len(batch.frame_ids):
+                return
+            self._select_frame(batch, frame_index)
+
+    def _select_frame(self, batch, frame_index):
+        frame_id = batch.frame_ids[frame_index]
+        frame_name = batch.frame_names[frame_index]
+        node_name = f"{self.framesRootNodeName}/{batch.group}/{frame_id}:{frame_name}"
+
+        if self._selection.node_name == node_name:
+            self._deselect()
+            return
+
+        self._deselect()
+        self._selection.node_name = node_name
+        self._selection.frames = [batch.handle]
+        self._selection.geom_name = frame_name
+        self._selection.geom_type = "frame"
+        self._selection.frame_id = frame_id
+        self._update_selection_panel()
+
     def _select_node(self, node_name):
         """Select or deselect a scene node."""
         if self._selection.node_name == node_name:
@@ -453,6 +522,7 @@ class Viewer(BaseVisualizer):
         self._selection.frames = frames
         self._selection.geom_name = geom_info.get("name")
         self._selection.geom_type = geom_info.get("type")
+        self._selection.frame_id = None
 
         self._update_selection_panel()
 
@@ -462,13 +532,15 @@ class Viewer(BaseVisualizer):
         self._selection.frames = []
         self._selection.geom_name = None
         self._selection.geom_type = None
+        self._selection.frame_id = None
         self._update_selection_panel()
 
     def _update_selection_panel(self):
         """Update the selection info panel GUI."""
         if self._selection.geom_name is not None:
             self._selection_name_text.content = f"**{self._selection.geom_name}**"
-            self._selection_type_text.content = f"Type: {self._selection.geom_type}"
+            geom_type = self._selection.geom_type
+            self._selection_type_text.content = f"Type: {geom_type}"
         else:
             self._selection_name_text.content = "*None*"
             self._selection_type_text.content = ""
@@ -476,6 +548,13 @@ class Viewer(BaseVisualizer):
     def _focus_selected(self):
         """Center the camera on the currently selected object."""
         if self._selection.node_name is None:
+            return
+
+        if self._selection.frame_id is not None:
+            position = self.data.oMf[self._selection.frame_id].translation
+            clients = self.viewer.get_clients()
+            for client in clients.values():
+                client.camera.look_at = position
             return
 
         geom_info = self._node_to_geom_info.get(self._selection.node_name, {})
@@ -823,14 +902,15 @@ class Viewer(BaseVisualizer):
     def updateFrames(self):
         """Update the position and orientation of all frames."""
         pin.updateFramePlacements(self.model, self.data)
-        for frame_id, frame in enumerate(self.model.frames):
-            M = self.data.oMf[frame_id]
-            group = _FRAME_TYPE_GROUPS.get(frame.type, "other")
-            viser_frame_name = self.framesRootNodeName + "/" + group + "/" + frame.name
-            if viser_frame_name in self.viser_frames:
-                viser_frame = self.viser_frames[viser_frame_name]
-                viser_frame.position = M.translation
-                viser_frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
+        for batch in self._frame_batches.values():
+            for index, frame_id in enumerate(batch.frame_ids):
+                M = self.data.oMf[frame_id]
+                batch.positions[index] = M.translation
+                batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[
+                    [3, 0, 1, 2]
+                ]
+            batch.handle.batched_positions = batch.positions.copy()
+            batch.handle.batched_wxyzs = batch.wxyzs.copy()
 
     def displayCollisions(self, visibility):
         """Set whether to display collision objects or not."""
@@ -860,18 +940,34 @@ class Viewer(BaseVisualizer):
         """Set whether to display frames or not.
 
         Explicitly sets visibility on all hierarchy levels (root, type groups,
-        individual frames) so that prior scene tree interactions are overridden.
+        and batched axes so that prior scene tree interactions are overridden.
         """
         self._display.frames = visibility
         if self.framesRootFrame is not None:
             self.framesRootFrame.visible = visibility
         for root in self._frame_type_roots.values():
             root.visible = visibility
-        for path in self._kinematic_frames:
-            if path in self.viser_frames:
-                self.viser_frames[path].visible = visibility
+        for batch in self._frame_batches.values():
+            batch.handle.visible = visibility
         if visibility:
             self.updateFrames()
+
+    def _apply_frame_filter(self, pattern):
+        """Filter batched frame axes by scaling unmatched instances to zero."""
+        self._frame_filter_pattern = pattern.lower()
+        for root in self._frame_type_roots.values():
+            root.visible = self._display.frames
+        for batch in self._frame_batches.values():
+            if self._frame_filter_pattern:
+                batch.scales[:] = [
+                    1.0
+                    if self._frame_filter_pattern in name.lower()
+                    else 0.0
+                    for name in batch.frame_names
+                ]
+            else:
+                batch.scales[:] = 1.0
+            batch.handle.batched_scales = batch.scales.copy()
 
     def loadContactSurfaces(self, robot, color=(0.2, 0.8, 0.2, 0.5)):
         """Load contact surfaces from a manipulation device.
@@ -1126,24 +1222,14 @@ class Viewer(BaseVisualizer):
 
         @frame_filter.on_update
         def _(_):
-            # Reset hierarchy visibility so scene tree toggles don't block
-            for root in self._frame_type_roots.values():
-                root.visible = True
-            pattern = frame_filter.value.lower()
-            for path, name in self._kinematic_frames.items():
-                if path in self.viser_frames:
-                    self.viser_frames[path].visible = (
-                        not pattern or pattern in name.lower()
-                    )
+            self._apply_frame_filter(frame_filter.value)
 
         def _update_frame_axes(_):
             length = frame_length_slider.value
             radius = frame_radius_slider.value
-            for path in self._kinematic_frames:
-                if path in self.viser_frames:
-                    handle = self.viser_frames[path]
-                    handle.axes_length = length
-                    handle.axes_radius = radius
+            for batch in self._frame_batches.values():
+                batch.handle.axes_length = length
+                batch.handle.axes_radius = radius
 
         frame_length_slider.on_update(_update_frame_axes)
         frame_radius_slider.on_update(_update_frame_axes)
