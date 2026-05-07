@@ -56,6 +56,8 @@ class _PathPlayerState:
 @dataclass
 class _DisplayState:
     collisions: bool = False
+    contact_surfaces: bool = False
+    frames: bool = False
     visuals: bool = True
 
 
@@ -109,6 +111,9 @@ class Viewer(BaseVisualizer):
         self.framesRootFrame = None
         self._frame_type_roots = {}
         self._kinematic_frames = {}  # {viser_path: frame_name}
+        self._geometry_frames = {}  # {base geometry path: [viser handles]}
+        self._visual_geometry_frames = []
+        self._collision_geometry_frames = []
         self._viewer_initialized = False
         self.start_qt_viewer = False
         self._react_graph_viewer_port = 6789
@@ -263,6 +268,14 @@ class Viewer(BaseVisualizer):
         """Load the robot in a Viser viewer with Gepetto-GUI style hierarchy."""
         self.viewerRootNodeName = rootNodeName
         self._viewer_initialized = True
+        self._geometry_frames = {}
+        self._visual_geometry_frames = []
+        self._collision_geometry_frames = []
+        self._contact_surface_frames = {}
+        self._contact_surface_joints = {}
+        self._contact_surfaces_root = None
+        self._display.frames = False
+        self._display.contact_surfaces = False
 
         # Create root frame
         if rootNodeName not in self.viser_frames:
@@ -401,6 +414,7 @@ class Viewer(BaseVisualizer):
         def _on_slider_update(_):
             if (
                 not self._path_player.update_lock
+                and not self._path_player.playing
                 and self._path_player.current is not None
             ):
                 q, success = self._path_player.current.eval(self.path_slider.value)
@@ -599,15 +613,33 @@ class Viewer(BaseVisualizer):
 
             # Handle both single frame and list of frames (for multi-geometry COLLADA)
             if isinstance(frame, list):
+                frames = []
                 for i, f in enumerate(frame):
                     indexed_name = f"{node_name}_{i}"
                     self.viser_frames[indexed_name] = f
                     self._node_to_geom_info[indexed_name] = geom_info
                     self._register_click_callback(f, node_name)
+                    frames.append(f)
             else:
+                frames = [frame]
                 self.viser_frames[node_name] = frame
                 self._node_to_geom_info[node_name] = geom_info
                 self._register_click_callback(frame, node_name)
+
+            self._node_to_geom_info[node_name] = geom_info
+            self._geometry_frames[node_name] = frames
+            geom_model = (
+                self.collision_model
+                if geometry_type == pin.GeometryType.COLLISION
+                else self.visual_model
+            )
+            if geom_model is not None:
+                geom_id = geom_model.getGeometryId(geometry_object.name)
+                cached_entry = (geom_id, geometry_object, tuple(frames))
+                if geometry_type == pin.GeometryType.COLLISION:
+                    self._collision_geometry_frames.append(cached_entry)
+                else:
+                    self._visual_geometry_frames.append(cached_entry)
 
         except Exception as e:
             msg = (
@@ -739,6 +771,9 @@ class Viewer(BaseVisualizer):
 
     def _get_geometry_frames(self, node_name):
         """Get all frames associated with a geometry object (handles indexed multi-geometry meshes)."""
+        if node_name in self._geometry_frames:
+            return self._geometry_frames[node_name]
+
         if node_name in self.viser_frames:
             return [self.viser_frames[node_name]]
 
@@ -759,41 +794,31 @@ class Viewer(BaseVisualizer):
 
         with self.viewer.atomic():
             if self._display.visuals and self.visual_model is not None:
-                pin.updateGeometryPlacements(
-                    self.model, self.data, self.visual_model, self.visual_data
+                self._update_geometry_frames(
+                    self.visual_model, self.visual_data, self._visual_geometry_frames
                 )
-                for visual in self.visual_model.geometryObjects:
-                    node_name = self.getGeometryObjectNodeName(
-                        visual, pin.GeometryType.VISUAL
-                    )
-
-                    M = self.visual_data.oMg[
-                        self.visual_model.getGeometryId(visual.name)
-                    ]
-
-                    for frame in self._get_geometry_frames(node_name):
-                        frame.position = M.translation
-                        frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
 
             if self._display.collisions and self.collision_model is not None:
-                pin.updateGeometryPlacements(
-                    self.model, self.data, self.collision_model, self.collision_data
+                self._update_geometry_frames(
+                    self.collision_model,
+                    self.collision_data,
+                    self._collision_geometry_frames,
                 )
-                for collision in self.collision_model.geometryObjects:
-                    node_name = self.getGeometryObjectNodeName(
-                        collision, pin.GeometryType.COLLISION
-                    )
 
-                    M = self.collision_data.oMg[
-                        self.collision_model.getGeometryId(collision.name)
-                    ]
+            if self._display.frames:
+                self.updateFrames()
+            if self._display.contact_surfaces:
+                self.updateContactSurfaces()
 
-                    for frame in self._get_geometry_frames(node_name):
-                        frame.position = M.translation
-                        frame.wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
-
-            self.updateFrames()
-            self.updateContactSurfaces()
+    def _update_geometry_frames(self, geom_model, geom_data, geometry_frames):
+        pin.updateGeometryPlacements(self.model, self.data, geom_model, geom_data)
+        for geom_id, geometry_object, frames in geometry_frames:
+            M = geom_data.oMg[geom_id]
+            position = M.translation * geometry_object.meshScale
+            wxyz = pin.Quaternion(M.rotation).coeffs()[[3, 0, 1, 2]]
+            for frame in frames:
+                frame.position = position
+                frame.wxyz = wxyz
 
     def updateFrames(self):
         """Update the position and orientation of all frames."""
@@ -837,6 +862,7 @@ class Viewer(BaseVisualizer):
         Explicitly sets visibility on all hierarchy levels (root, type groups,
         individual frames) so that prior scene tree interactions are overridden.
         """
+        self._display.frames = visibility
         if self.framesRootFrame is not None:
             self.framesRootFrame.visible = visibility
         for root in self._frame_type_roots.values():
@@ -913,8 +939,11 @@ class Viewer(BaseVisualizer):
 
     def displayContactSurfaces(self, visibility):
         """Set whether to display contact surfaces or not."""
+        self._display.contact_surfaces = visibility
         if self._contact_surfaces_root is not None:
             self._contact_surfaces_root.visible = visibility
+        if visibility:
+            self.updateContactSurfaces()
 
     def updateContactSurfaces(self):
         """Update contact surface positions based on current joint transforms."""
@@ -1020,6 +1049,8 @@ class Viewer(BaseVisualizer):
                 sleep_time = max(0, target_frame_time - elapsed)
                 if sleep_time > 0:
                     time.sleep(sleep_time)
+                else:
+                    time.sleep(0)
 
             self._path_player.update_lock = True
             self.path_slider.value = 0.0 if path_time >= path_length else path_time
