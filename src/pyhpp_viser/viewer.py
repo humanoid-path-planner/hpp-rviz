@@ -749,6 +749,31 @@ class Viewer(BaseVisualizer):
                 is_static,
             )
 
+        if (
+            color_override is not None
+            and len(mesh_path) > 0
+            and (isinstance(geom, MESH_TYPES) or isinstance(geom, hppfcl.Convex))
+        ):
+            real_mesh_path = os.path.realpath(mesh_path)
+            key = (
+                batch_parent_path,
+                is_static,
+                "colored_mesh_path",
+                real_mesh_path,
+                primitive_color,
+            )
+            return (
+                key,
+                real_mesh_path,
+                primitive_color,
+                False,
+                "mesh_simple",
+                node_name,
+                batch_parent_path,
+                batch_parent_names,
+                is_static,
+            )
+
         if isinstance(geom, hppfcl.Box):
             extents = tuple(float(value) for value in geom.halfSide * 2.0)
             mesh = trimesh.creation.box(extents=extents)
@@ -810,8 +835,18 @@ class Viewer(BaseVisualizer):
 
         batch_name = f"{group['parent_path']}/visual_batch_{group['kind']}_{batch_index}"
         color = group["color"]
-        if group["kind"] == "simple":
+        if group["kind"] in ("simple", "mesh_simple"):
             mesh = group["mesh_source"]
+            if group["kind"] == "mesh_simple":
+                try:
+                    mesh = self._load_simple_batch_mesh(mesh)
+                except Exception as exc:
+                    warnings.warn(
+                        f"Failed to batch visual mesh {mesh}: {exc}",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    return False
             handle = self.viewer.scene.add_batched_meshes_simple(
                 batch_name,
                 vertices=np.asarray(mesh.vertices, dtype=np.float32),
@@ -872,6 +907,15 @@ class Viewer(BaseVisualizer):
         self._visual_batched_geometry_frames.append(batch)
         self._register_batched_geometry_click_callback(batch)
         return True
+
+    def _load_simple_batch_mesh(self, mesh_path):
+        mesh = trimesh.load_mesh(mesh_path)
+        if isinstance(mesh, trimesh.Scene):
+            mesh = mesh.dump(concatenate=True)
+        if not hasattr(mesh, "vertices") or not hasattr(mesh, "faces"):
+            msg = f"mesh does not expose vertices/faces: {type(mesh)}"
+            raise ValueError(msg)
+        return mesh
 
     def _geometry_color_options(self, geometry_object, color):
         if color is not None:
