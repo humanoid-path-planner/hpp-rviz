@@ -4,7 +4,8 @@ dependencies = [
   "pin",
   "pycollada",
   "trimesh",
-  "viser"
+  "viser",
+  "websockets"
 ]
 description = "Display of hpp robots and obstacles in gepetto-viewer"
 license = "BSD-2-Clause"

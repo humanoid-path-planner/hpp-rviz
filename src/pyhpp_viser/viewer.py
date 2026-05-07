@@ -110,6 +110,11 @@ class Viewer(BaseVisualizer):
         self._frame_type_roots = {}
         self._kinematic_frames = {}  # {viser_path: frame_name}
         self._viewer_initialized = False
+        self.start_qt_viewer = False
+        self._react_graph_viewer_port = 6789
+        self._react_graph_viewer_host = "localhost"
+        self._web_socket_bridge_port = 8765
+        self._web_socket_bridge_host = "localhost"
 
         self.problem = problem
         self.graph = None
@@ -123,6 +128,8 @@ class Viewer(BaseVisualizer):
         self._contact_surface_frames = {}
         self._contact_surface_joints = {}
         self._contact_surfaces_root = None
+        self._graph_thread = None
+        self._last_config = None
 
     def __call__(self, q):
         """Allow calling viewer as v(q) for compatibility with Gepetto-GUI."""
@@ -1033,6 +1040,12 @@ class Viewer(BaseVisualizer):
         @self._graph_button.on_click
         def _on_show_graph_click(_):
             self._launch_graph_viewer()
+            if not self.start_qt_viewer:
+                import webbrowser
+
+                webbrowser.open(
+                    f"http://{self._react_graph_viewer_host}:{self._react_graph_viewer_port}"
+                )
 
     def _create_visibility_toggles(self):
         """Create checkboxes for toggling visibility of scene elements."""
@@ -1115,6 +1128,7 @@ class Viewer(BaseVisualizer):
             problem: PyWProblem from pyhpp.manipulation
         """
         self.problem = problem
+        self._publish_viewer_snapshot(None, self.problem)
 
     def setGraph(self, graph):
         """Set constraint graph for graph viewer integration.
@@ -1123,6 +1137,42 @@ class Viewer(BaseVisualizer):
             graph: PyWGraph from pyhpp.manipulation
         """
         self.graph = graph
+        self._publish_viewer_snapshot(self.graph, None)
+
+    def setupReactGraphViewer(self, port: int, host: str = "localhost"):
+        """Set the port for the React-based graph viewer.
+
+        Args:
+            port: The port number to use for the React viewer.
+            host: The host address for the React viewer.
+        """
+        self._react_graph_viewer_port = port
+        self._react_graph_viewer_host = host
+
+    def setupWebSocketBridge(self, port: int, host: str = "localhost"):
+        """Set the port for the WebSocket-based graph viewer (Qt).
+
+        Args:
+            port: The port number to use for the WebSocket viewer.
+            host: The host address for the WebSocket viewer.
+        """
+        self._web_socket_bridge_port = port
+        self._web_socket_bridge_host = host
+
+    def setQtGraphViewer(self, choice=True):
+        """Set whether to start the Qt-based graph viewer instead of the React-based one.
+
+        Args:
+            choice: If True, start the Qt viewer. If False, start the React viewer. Default is True.
+        """
+        self.start_qt_viewer = choice
+
+    def _publish_viewer_snapshot(self, graph=None, problem=None):
+        """Send the current graph/problem snapshot to the React app if available."""
+        if self._graph_thread is None or not self._graph_thread.is_alive():
+            print("Graph viewer thread not running, cannot publish viewer snapshot.")
+            return
+        self._graph_thread.send_viewer_snapshot(graph, problem)
 
     def _launch_graph_viewer(self):
         """Launch hpp-plot graph viewer in separate thread."""
@@ -1134,17 +1184,30 @@ class Viewer(BaseVisualizer):
             return
 
         try:
+            if self._graph_thread is not None and self._graph_thread.is_alive():
+                print("Graph viewer thread is already running")
+                return
             from pyhpp_plot import GraphViewerThread
 
             thread = GraphViewerThread(
-                self.graph, self.problem, self._on_config_generated
+                self.graph,
+                self.problem,
+                self._on_config_generated,
+                react_port=self._react_graph_viewer_port,
+                react_host=self._react_graph_viewer_host,
+                ws_port=self._web_socket_bridge_port,
+                ws_host=self._web_socket_bridge_host,
+                start_qt_viewer=self.start_qt_viewer,
             )
+            self._graph_thread = thread
             thread.start()
-        except Exception:
+        except Exception as exc:
+            print(f"Failed to launch graph viewer: {exc}")
             pass
 
     def _on_config_generated(self, config, label):
         """Called from graph viewer thread when config is generated."""
+        self._last_config = config
         self.display(config)
 
     def playPath(self, path, speed=1):
