@@ -181,6 +181,7 @@ class Viewer(BaseVisualizer):
         self._geometry_frames = {}  # {base geometry path: [viser handles]}
         self._visual_geometry_frames = []
         self._visual_batched_geometry_frames = []
+        self._visual_display_handles = []
         self._collision_geometry_frames = []
         self._profiler = _ProfilerState()
         self._viewer_initialized = False
@@ -256,6 +257,19 @@ class Viewer(BaseVisualizer):
                 self.viser_frames[frame_path] = self.viewer.scene.add_frame(
                     frame_path, show_axes=False
                 )
+
+    def _get_visual_batch_parent(self, geometry_object):
+        """Return the hierarchy prefix used to place a visual batch."""
+        names = geometry_object.name.split("/")
+        if len(names) == 1:
+            parent_names = [self.viewerRootNodeName.split("/")[-1]]
+        else:
+            parent_names = names[:-1]
+
+        parent_path = self.viewerRootNodeName
+        for name in parent_names:
+            parent_path += "/" + name
+        return parent_path, parent_names
 
     def start(self, host="localhost", port="8000", open=True, new_server=False):
         """Start the viewer, load the robot model, and open the browser.
@@ -340,6 +354,7 @@ class Viewer(BaseVisualizer):
         self._geometry_frames = {}
         self._visual_geometry_frames = []
         self._visual_batched_geometry_frames = []
+        self._visual_display_handles = []
         self._collision_geometry_frames = []
         self._contact_surface_frames = {}
         self._contact_surface_joints = {}
@@ -653,7 +668,16 @@ class Viewer(BaseVisualizer):
                 fallback_objects.append(visual)
                 continue
 
-            key, mesh_source, primitive_color, flat_shading, batch_kind = batch_spec
+            (
+                key,
+                mesh_source,
+                primitive_color,
+                flat_shading,
+                batch_kind,
+                node_name,
+                batch_parent_path,
+                batch_parent_names,
+            ) = batch_spec
             group = batched_groups.setdefault(
                 key,
                 {
@@ -661,10 +685,14 @@ class Viewer(BaseVisualizer):
                     "mesh_source": mesh_source,
                     "color": primitive_color,
                     "flat_shading": flat_shading,
+                    "parent_path": batch_parent_path,
+                    "parent_names": batch_parent_names,
                     "objects": [],
+                    "node_names": [],
                 },
             )
             group["objects"].append(visual)
+            group["node_names"].append(node_name)
 
         for index, group in enumerate(batched_groups.values()):
             objects = group["objects"]
@@ -685,6 +713,12 @@ class Viewer(BaseVisualizer):
         primitive_color = tuple(float(value) for value in primitive_color)
         geom = geometry_object.geometry
         mesh_path = getattr(geometry_object, "meshPath", "")
+        node_name = self.getGeometryObjectNodeName(
+            geometry_object, pin.GeometryType.VISUAL, create_groups=False
+        )
+        batch_parent_path, batch_parent_names = self._get_visual_batch_parent(
+            geometry_object
+        )
 
         if (
             color_override is None
@@ -693,8 +727,17 @@ class Viewer(BaseVisualizer):
             and (isinstance(geom, MESH_TYPES) or isinstance(geom, hppfcl.Convex))
         ):
             real_mesh_path = os.path.realpath(mesh_path)
-            key = ("mesh_path", real_mesh_path)
-            return key, real_mesh_path, None, None, "trimesh"
+            key = (batch_parent_path, "mesh_path", real_mesh_path)
+            return (
+                key,
+                real_mesh_path,
+                None,
+                None,
+                "trimesh",
+                node_name,
+                batch_parent_path,
+                batch_parent_names,
+            )
 
         if isinstance(geom, hppfcl.Box):
             extents = tuple(float(value) for value in geom.halfSide * 2.0)
@@ -727,8 +770,17 @@ class Viewer(BaseVisualizer):
         else:
             return None
 
-        key = (primitive_key, primitive_color, flat_shading)
-        return key, mesh, primitive_color, flat_shading, "simple"
+        key = (batch_parent_path, primitive_key, primitive_color, flat_shading)
+        return (
+            key,
+            mesh,
+            primitive_color,
+            flat_shading,
+            "simple",
+            node_name,
+            batch_parent_path,
+            batch_parent_names,
+        )
 
     def _load_batched_visual_geometry(self, batch_index, group):
         objects = group["objects"]
@@ -737,13 +789,9 @@ class Viewer(BaseVisualizer):
         wxyzs = np.zeros((num_objects, 4), dtype=np.float32)
         wxyzs[:, 0] = 1.0
 
-        batch_root = self.viewerRootNodeName + "/visual_batches"
-        if batch_root not in self.viser_frames:
-            self.viser_frames[batch_root] = self.viewer.scene.add_frame(
-                batch_root, show_axes=False
-            )
+        self._create_hierarchy_nodes([*group["parent_names"], "visual_batch"])
 
-        batch_name = f"{batch_root}/{group['kind']}_{batch_index}"
+        batch_name = f"{group['parent_path']}/visual_batch_{group['kind']}_{batch_index}"
         color = group["color"]
         if group["kind"] == "simple":
             mesh = group["mesh_source"]
@@ -776,12 +824,10 @@ class Viewer(BaseVisualizer):
                 )
                 return False
         self.viser_frames[batch_name] = handle
+        self._visual_display_handles.append(handle)
 
         entries = []
-        for visual in objects:
-            node_name = self.getGeometryObjectNodeName(
-                visual, pin.GeometryType.VISUAL, create_groups=False
-            )
+        for visual, node_name in zip(objects, group["node_names"]):
             geom_info = {
                 "name": visual.name,
                 "type": "visual",
@@ -955,6 +1001,7 @@ class Viewer(BaseVisualizer):
                     self._collision_geometry_frames.append(cached_entry)
                 else:
                     self._visual_geometry_frames.append(cached_entry)
+                    self._visual_display_handles.extend(frames)
 
         except Exception as e:
             msg = (
@@ -1470,13 +1517,8 @@ class Viewer(BaseVisualizer):
         self._display.visuals = visibility
         if visibility:
             self._reset_playback_update_timer("visuals")
-        if self.visual_model is None:
-            return
-
-        for visual in self.visual_model.geometryObjects:
-            node_name = self.getGeometryObjectNodeName(visual, pin.GeometryType.VISUAL)
-            for frame in self._get_geometry_frames(node_name):
-                frame.visible = visibility
+        for frame in self._visual_display_handles:
+            frame.visible = visibility
 
     def displayFrames(self, visibility):
         """Set whether to display frames or not.
