@@ -95,14 +95,14 @@ class _GeometryFrameState:
     geom_id: int
     geometry_object: object
     frames: tuple
+    is_static: bool = False
+    initialized: bool = False
     last_position: object = None
     last_rotation: object = None
 
 
 @dataclass
 class _BatchedGeometryEntry:
-    geom_id: int
-    geometry_object: object
     node_name: str
 
 
@@ -111,10 +111,12 @@ class _BatchedGeometryState:
     name: str
     handle: object
     entries: list
+    geom_ids: list
+    mesh_scales: np.ndarray
     positions: np.ndarray
     wxyzs: np.ndarray
-    last_positions: object = None
-    last_wxyzs: object = None
+    is_static: bool = False
+    initialized: bool = False
 
 
 @dataclass
@@ -270,6 +272,10 @@ class Viewer(BaseVisualizer):
         for name in parent_names:
             parent_path += "/" + name
         return parent_path, parent_names
+
+    def _is_geometry_static(self, geometry_object):
+        """Return whether a geometry is attached to the universe joint."""
+        return getattr(geometry_object, "parentJoint", None) == 0
 
     def start(self, host="localhost", port="8000", open=True, new_server=False):
         """Start the viewer, load the robot model, and open the browser.
@@ -677,6 +683,7 @@ class Viewer(BaseVisualizer):
                 node_name,
                 batch_parent_path,
                 batch_parent_names,
+                is_static,
             ) = batch_spec
             group = batched_groups.setdefault(
                 key,
@@ -687,6 +694,7 @@ class Viewer(BaseVisualizer):
                     "flat_shading": flat_shading,
                     "parent_path": batch_parent_path,
                     "parent_names": batch_parent_names,
+                    "is_static": is_static,
                     "objects": [],
                     "node_names": [],
                 },
@@ -719,6 +727,7 @@ class Viewer(BaseVisualizer):
         batch_parent_path, batch_parent_names = self._get_visual_batch_parent(
             geometry_object
         )
+        is_static = self._is_geometry_static(geometry_object)
 
         if (
             color_override is None
@@ -727,7 +736,7 @@ class Viewer(BaseVisualizer):
             and (isinstance(geom, MESH_TYPES) or isinstance(geom, hppfcl.Convex))
         ):
             real_mesh_path = os.path.realpath(mesh_path)
-            key = (batch_parent_path, "mesh_path", real_mesh_path)
+            key = (batch_parent_path, is_static, "mesh_path", real_mesh_path)
             return (
                 key,
                 real_mesh_path,
@@ -737,6 +746,7 @@ class Viewer(BaseVisualizer):
                 node_name,
                 batch_parent_path,
                 batch_parent_names,
+                is_static,
             )
 
         if isinstance(geom, hppfcl.Box):
@@ -770,7 +780,13 @@ class Viewer(BaseVisualizer):
         else:
             return None
 
-        key = (batch_parent_path, primitive_key, primitive_color, flat_shading)
+        key = (
+            batch_parent_path,
+            is_static,
+            primitive_key,
+            primitive_color,
+            flat_shading,
+        )
         return (
             key,
             mesh,
@@ -780,6 +796,7 @@ class Viewer(BaseVisualizer):
             node_name,
             batch_parent_path,
             batch_parent_names,
+            is_static,
         )
 
     def _load_batched_visual_geometry(self, batch_index, group):
@@ -827,28 +844,30 @@ class Viewer(BaseVisualizer):
         self._visual_display_handles.append(handle)
 
         entries = []
-        for visual, node_name in zip(objects, group["node_names"]):
+        geom_ids = []
+        mesh_scales = np.empty((num_objects, 3), dtype=np.float32)
+        for index, (visual, node_name) in enumerate(zip(objects, group["node_names"])):
             geom_info = {
                 "name": visual.name,
                 "type": "visual",
                 "geometry_type": pin.GeometryType.VISUAL,
             }
+            geom_id = self.visual_model.getGeometryId(visual.name)
             self._node_to_geom_info[node_name] = geom_info
             self._geometry_frames[node_name] = [handle]
-            entries.append(
-                _BatchedGeometryEntry(
-                    geom_id=self.visual_model.getGeometryId(visual.name),
-                    geometry_object=visual,
-                    node_name=node_name,
-                )
-            )
+            entries.append(_BatchedGeometryEntry(node_name=node_name))
+            geom_ids.append(geom_id)
+            mesh_scales[index] = visual.meshScale
 
         batch = _BatchedGeometryState(
             name=batch_name,
             handle=handle,
             entries=entries,
+            geom_ids=geom_ids,
+            mesh_scales=mesh_scales,
             positions=positions,
             wxyzs=wxyzs,
+            is_static=group["is_static"],
         )
         self._visual_batched_geometry_frames.append(batch)
         self._register_batched_geometry_click_callback(batch)
@@ -995,7 +1014,10 @@ class Viewer(BaseVisualizer):
             if geom_model is not None:
                 geom_id = geom_model.getGeometryId(geometry_object.name)
                 cached_entry = _GeometryFrameState(
-                    geom_id, geometry_object, tuple(frames)
+                    geom_id,
+                    geometry_object,
+                    tuple(frames),
+                    is_static=self._is_geometry_static(geometry_object),
                 )
                 if geometry_type == pin.GeometryType.COLLISION:
                     self._collision_geometry_frames.append(cached_entry)
@@ -1381,6 +1403,10 @@ class Viewer(BaseVisualizer):
         changed_entries = 0
         skipped_entries = 0
         for entry in geometry_frames:
+            if entry.is_static and entry.initialized:
+                skipped_entries += 1
+                continue
+
             M = geom_data.oMg[entry.geom_id]
             position = M.translation * entry.geometry_object.meshScale
             rotation = M.rotation
@@ -1410,6 +1436,7 @@ class Viewer(BaseVisualizer):
                 entry.last_position = position.copy()
             if rotation_changed:
                 entry.last_rotation = rotation.copy()
+            entry.initialized = True
         self._profile_value(
             f"{label}.changed_geometry_entries", float(changed_entries), "entries"
         )
@@ -1425,14 +1452,18 @@ class Viewer(BaseVisualizer):
 
     def _update_batched_geometry_frames(self, geom_data, batched_geometry_frames, label):
         total_entries = 0
-        changed_batches = 0
+        queued_batches = 0
         skipped_batches = 0
         fill_start = self._profile_start()
         for batch in batched_geometry_frames:
             total_entries += len(batch.entries)
-            for index, entry in enumerate(batch.entries):
-                M = geom_data.oMg[entry.geom_id]
-                batch.positions[index] = M.translation * entry.geometry_object.meshScale
+            if batch.is_static and batch.initialized:
+                skipped_batches += 1
+                continue
+
+            for index, geom_id in enumerate(batch.geom_ids):
+                M = geom_data.oMg[geom_id]
+                batch.positions[index] = M.translation * batch.mesh_scales[index]
                 batch.wxyzs[index] = pin.Quaternion(M.rotation).coeffs()[
                     [3, 0, 1, 2]
                 ]
@@ -1440,26 +1471,16 @@ class Viewer(BaseVisualizer):
 
         queue_start = self._profile_start()
         for batch in batched_geometry_frames:
-            positions_changed = batch.last_positions is None or not np.array_equal(
-                batch.positions, batch.last_positions
-            )
-            wxyzs_changed = batch.last_wxyzs is None or not np.array_equal(
-                batch.wxyzs, batch.last_wxyzs
-            )
-            if not positions_changed and not wxyzs_changed:
-                skipped_batches += 1
+            if batch.is_static and batch.initialized:
                 continue
 
-            changed_batches += 1
-            if positions_changed:
-                batch.handle.batched_positions = batch.positions.copy()
-                batch.last_positions = batch.positions.copy()
-            if wxyzs_changed:
-                batch.handle.batched_wxyzs = batch.wxyzs.copy()
-                batch.last_wxyzs = batch.wxyzs.copy()
+            queued_batches += 1
+            batch.handle.batched_positions = batch.positions.copy()
+            batch.handle.batched_wxyzs = batch.wxyzs.copy()
+            batch.initialized = True
 
         self._profile_value(
-            f"{label}.changed_batched_geometry", float(changed_batches), "batches"
+            f"{label}.queued_batched_geometry", float(queued_batches), "batches"
         )
         self._profile_value(
             f"{label}.skipped_batched_geometry", float(skipped_batches), "batches"
