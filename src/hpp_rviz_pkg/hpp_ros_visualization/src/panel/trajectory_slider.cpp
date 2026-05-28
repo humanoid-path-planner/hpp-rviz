@@ -18,6 +18,12 @@ TrajectorySlider::TrajectorySlider(QWidget* parent) : Panel(parent) {
           this, &TrajectorySlider::onTValueChanged);
   connect(target_frame_selector_, &QComboBox::currentTextChanged, this,
           &TrajectorySlider::onComboChanged);
+  connect(copy_button_, &QPushButton::clicked, [this]() {
+      QApplication::clipboard()->setText(
+          hpp_vector_configuration_edit_->toPlainText());
+      copy_button_->setText("Copied");
+      QTimer::singleShot(1000, this, [this]() { copy_button_->setText("Copy"); });
+  });
 }
 
 TrajectorySlider::~TrajectorySlider() = default;

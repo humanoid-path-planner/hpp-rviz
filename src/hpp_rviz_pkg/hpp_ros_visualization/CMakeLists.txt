@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(hpp_ros_vizualisation)
+project(hpp_ros_visualization)
 
 if(NOT CMAKE_C_STANDARD)
     set(CMAKE_C_STANDARD 99)
@@ -21,7 +21,9 @@ find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(hpp_msgs REQUIRED)
+if(NOT hpp_msgs_FOUND)
+    find_package(hpp_msgs REQUIRED)
+endif()
 
 get_target_property(
     _rviz_common_link
@@ -46,55 +48,61 @@ if(QT_VERSION_MAJOR EQUAL 6)
       include/hpp/plugin/trajectory.hpp
       include/hpp/panel/trajectory_slider.hpp
       include/hpp/doubleSlider.hpp
+      include/hpp/tool/waypoint.hpp
+      include/hpp/Position3d.hpp
+      include/hpp/interactiveWaypoint.hpp
     )
 else()
     qt5_wrap_cpp(MOC_FILES
       include/hpp/plugin/trajectory.hpp
       include/hpp/panel/trajectory_slider.hpp
       include/hpp/doubleSlider.hpp
+      include/hpp/tool/waypoint.hpp
+       include/hpp/Position3d.hpp
+      include/hpp/interactiveWaypoint.hpp
     )
 endif()
 
 add_library(
-    trajectory
+    hpp_ros_visualization
     src/plugin/trajectory.cpp
     src/panel/trajectory_slider.cpp
     src/panel/ui.cpp
     src/panel/communication.cpp
+    src/tool/waypoint.cpp
     ${MOC_FILES}
 )
 
 target_include_directories(
-    trajectory
+    hpp_ros_visualization
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(trajectory
-  pluginlib
-  rviz_common
-  rviz_default_plugins
-  rviz_rendering
-  sensor_msgs
-  std_msgs
-  hpp_msgs
-)
 
-target_link_libraries(
-    trajectory
+
+rosidl_get_typesupport_target(cpp_typesupport_target
+    hpp_msgs "rosidl_typesupport_cpp")
+
+target_link_libraries(hpp_ros_visualization PRIVATE
     pluginlib::pluginlib
     rviz_common::rviz_common
+    rviz_default_plugins::rviz_default_plugins
     rviz_rendering::rviz_rendering
+    ${sensor_msgs_TARGETS}
+    ${std_msgs_TARGETS}
+    "${cpp_typesupport_target}"
 )
 
 install(
-    TARGETS trajectory
+    TARGETS hpp_ros_visualization
     EXPORT export_hpp_trajectory_plugin
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
 )
+
 install(DIRECTORY include/ DESTINATION include)
 install(FILES rviz_common_plugins.xml DESTINATION share/${PROJECT_NAME})
 install(

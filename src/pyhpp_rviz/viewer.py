@@ -1,25 +1,23 @@
 import threading
-import time
-import warnings
 
 import numpy as np
 import pinocchio as pin
 import pyhpp.core as core
 import rclpy
-from geometry_msgs.msg import PoseStamped
-from hpp_msgs.msg import PathInfo, PinnochioJoint, PinnochioJointArray
+from geometry_msgs.msg import PoseStamped, TransformStamped
+from hpp_msgs.msg import PathInfo, PinocchioJoint, HppVectorConfiguration
 from nav_msgs.msg import Path
 from pinocchio.visualize import BaseVisualizer
 from pyhpp import tools
 from pyhpp.manipulation import Device, modelsInfo
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.publisher import Publisher
 
-from .publisher.FreeFlyerPublisher import FreeFlyerPublisher
-from .publisher.JointState import JointStatePublisher
 from .publisher.Navigation import NavigationPublisher
-from .publisher.RobotState import createRobotStatePublisherFromSubProcess
+from .publisher.RobotDescriptionPublisher import RobotDescriptionPublisher
 from .publisher.StaticTfPublisher import StaticTFPublisher
+from .publisher.TransformStampedPublisher import TransformStampedPublisher
 
 
 class RVizVisualizer(BaseVisualizer):
@@ -31,12 +29,16 @@ class RVizVisualizer(BaseVisualizer):
         self.data: pin.Data = pin.Data()
 
         self.fixed_frame = "world"
-        self.joint_map = {}  # name → (idx_q, type, child_frame_or_None)
 
-        self.joint_state_publisher: JointStatePublisher = None
+        self.robot_description_publisher: RobotDescriptionPublisher = None
         self.static_tf_publisher: StaticTFPublisher = None
         self.navigation_publisher: NavigationPublisher = None
-        self.freeFlyer_publisher: FreeFlyerPublisher = None
+        self.transform_stamped_publisher: TransformStampedPublisher = None
+        self._joints_node: Node = None
+        self._path_node: Node = None
+
+        self.pinocchioJoint_pub: Publisher = None
+        self.path_info_pub: Publisher = None
 
         self._executor = None
         self._spin_thread = None
@@ -45,87 +47,98 @@ class RVizVisualizer(BaseVisualizer):
         self.last_vector_configuration = None
 
         self.path_info_pub = None
-        self.pinnochioJoint_pub = None
+        self.pinocchioJoint_pub = None
+
+        self.description_publishers = {}
 
     # ====================== Init ======================
 
     def initViewer(self, robot: Device = None):
+        self._init_model(robot)
+        self._init_ros_nodes()
+        self._init_executor()
+        self._publish_robot_descriptions(robot.modelsInfo())
+
+    def _init_model(self, robot: Device):
         self.model = robot.model()
         self.data = self.model.createData()
         self.robot = robot
 
+    def _init_ros_nodes(self):
+
         if not rclpy.ok():
             rclpy.init()
 
-        self.joint_state_publisher = JointStatePublisher()
+        self.robot_description_publisher = RobotDescriptionPublisher()
         self.static_tf_publisher = StaticTFPublisher()
         self.navigation_publisher = NavigationPublisher()
-        self.freeFlyer_publisher = FreeFlyerPublisher()
+        self.transform_stamped_publisher = TransformStampedPublisher()
 
-        self._joints_node = Node("hpp_pinnochio_joint_publisher")
-        self._path_node = Node("hpp_pinnochio_path_publisher")
+        self._joints_node = Node("hpp_pinocchio_joint_publisher")
+        self._path_node = Node("hpp_pinocchio_path_publisher")
+        self._waypoint_node = Node("hpp_waypoint_publisher")
+
 
         # Subscriptions
-        self.joint_state_publisher.create_subscription(
+        self._joints_node.create_subscription(
+            PinocchioJoint, "/hpp/pinocchio_joints", self._on_joint_receive, 10
+        )
+
+        self._path_node.create_subscription(
             PathInfo, "/hpp/trajectory_time", self._on_trajectory_time, 10
         )
-        self._joints_node.create_subscription(
-            PinnochioJoint, "/hpp/pinnochio_joints", self._on_joint_receive, 10
-        )
+
         self._path_node.create_subscription(
             PathInfo, "/hpp/target_frame", self._on_target_frame, 10
         )
 
         # Publishers
-        self.pinnochioJoint_pub = self._joints_node.create_publisher(
-            PinnochioJointArray, "/hpp/scene_objects", 10
+        self.pinocchioJoint_pub = self._joints_node.create_publisher(
+            HppVectorConfiguration, "/hpp/scene_objects", 10
         )
         self.path_info_pub = self._path_node.create_publisher(
             PathInfo, "/hpp/pathInfo", 10
         )
+        self.waypoint_pub = self._waypoint_node.create_publisher(
+            PoseStamped, "/hpp/waypoint", 10
+        )
 
-        self._build_map_for_publisher()
-
+    def _init_executor(self):
         self._executor = MultiThreadedExecutor()
         for node in [
-            self.joint_state_publisher,
+            self.robot_description_publisher,
             self.static_tf_publisher,
             self.navigation_publisher,
-            self.freeFlyer_publisher,
+            self.transform_stamped_publisher,
             self._joints_node,
             self._path_node,
+            self._waypoint_node
         ]:
             self._executor.add_node(node)
 
         self._spin_thread = threading.Thread(target=self._executor.spin, daemon=True)
         self._spin_thread.start()
 
-        if robot.modelsInfo():
-            for m in robot.modelsInfo():
-                m.urdfPath = m.urdfPath or ""
-                m.prefix = m.prefix or ""
-                with open(tools.xacro.retrieve_resource(m.urdfPath)) as f:
-                    robot_desc = f.read()
-                if not robot_desc:
-                    raise ValueError(
-                        f"URDF file at {m.urdfPath} is empty or could not be read."
-                    )
-                createRobotStatePublisherFromSubProcess(
-                    m.prefix, tools.xacro.retrieve_resource(m.urdfPath)
+    def _publish_robot_descriptions(self, models: list[modelsInfo]):
+        if models is None:
+            return
+        for m in models:
+            m.urdfPath = m.urdfPath or ""
+            m.prefix = m.prefix or ""
+            with open(tools.xacro.retrieve_resource(m.urdfPath)) as f:
+                robot_desc = f.read()
+            if not robot_desc:
+                raise ValueError(
+                    f"URDF file at {m.urdfPath} is empty or could not be read."
                 )
-            self._publish_root_static_transforms(robot.modelsInfo())
+            self.robot_description_publisher.publish(m.prefix, robot_desc)
 
-    # ====================== Static TF ======================
+        self._publish_root_static_transforms(models)
 
+    # ====================== RVIZ SETUP ======================
     def _publish_root_static_transforms(self, models: list[modelsInfo]):
         for m in models:
             ns = m.prefix.strip("/") if m.prefix else ""
-
-            if any(
-                jtype == "FREE_FLYER" and name.startswith(ns + "/")
-                for name, (_, jtype, _, _) in self.joint_map.items()
-            ):
-                continue
 
             root_frame = self._get_first_body_frame_for_namespace(ns)
             if not root_frame:
@@ -138,7 +151,6 @@ class RVizVisualizer(BaseVisualizer):
                 xyz=pose.translation,
                 quat_xyzw=pin.Quaternion(pose.rotation).coeffs(),
             )
-            print(f"[StaticTF] '{self.fixed_frame}' → '{root_frame}' (ns='{ns}')")
 
     def _get_first_body_frame_for_namespace(self, namespace: str) -> str | None:
         prefix = f"{namespace}/" if namespace else ""
@@ -154,50 +166,7 @@ class RVizVisualizer(BaseVisualizer):
             return frame.name
         return None
 
-    # ====================== Mapping joints ======================
-
-    def _get_root_link_for_joint(self, joint_id: int) -> str:
-        candidates = [
-            f
-            for f in self.model.frames
-            if f.parentJoint == joint_id and f.type == pin.FrameType.BODY
-        ]
-        if not candidates:
-            raise ValueError(
-                f"No BODY frame found for joint_id={joint_id} "
-                f"({self.model.names[joint_id]})"
-            )
-        if len(candidates) > 1:
-            warnings.warn(
-                f"Multiple BODY frames for joint {joint_id}, using first: "
-                f"{[f.name for f in candidates]}"
-            )
-        return candidates[0].name
-
-    def _build_map_for_publisher(self):
-        self.joint_map = {}
-        for joint_id in range(1, self.model.njoints):
-            joint: pin.JointModel = self.model.joints[joint_id]
-            name = self.model.names[joint_id]
-            idx_q = joint.idx_q
-            parts = name.rsplit("/", 1)
-            namespace = parts[0] if len(parts) > 1 else ""
-            joint_name = (
-                parts[1] if len(parts) > 1 else name
-            )  # shortname without namespace
-            if joint.nq == 1:
-                self.joint_map[name] = (idx_q, "JOINT", namespace, joint_name)
-            elif joint.nq == 7:
-                root_link = self._get_root_link_for_joint(joint_id)
-                if root_link.startswith(namespace + "/"):
-                    root_link = root_link[len(namespace) + 1 :]
-                child_frame = f"{namespace}/{root_link}" if namespace else root_link
-                self.joint_map[name] = (idx_q, "FREE_FLYER", namespace, child_frame)
-            else:
-                raise ValueError(f"Unsupported joint nq={joint.nq} for '{name}'")
-
     # ====================== Display ======================
-
     def __call__(self, q):
         self.display(q)
 
@@ -207,7 +176,7 @@ class RVizVisualizer(BaseVisualizer):
         pin.forwardKinematics(self.model, self.data, q)
         pin.updateFramePlacements(self.model, self.data)
 
-        if self.joint_state_publisher is not None:
+        if self.transform_stamped_publisher is not None:
             self._publish_scene(q)
         self.last_vector_configuration = q
 
@@ -215,16 +184,47 @@ class RVizVisualizer(BaseVisualizer):
 
     def _publish_scene(self, q):
         q_vec = np.asarray(q).reshape(-1)
-        array_msg = PinnochioJointArray()
-        joint_states = {}  # namespace → {joint_name: position}
+        now = self.transform_stamped_publisher.get_clock().now().to_msg()
+
+        transforms = []
+        for frame_id in range(self.model.nframes):
+            frame = self.model.frames[frame_id]
+            if frame.name in ("universe",):
+                continue
+
+            oMf = self.data.oMf[frame_id]
+            quat = pin.Quaternion(oMf.rotation)
+
+            t = TransformStamped()
+            t.header.stamp = now
+            t.header.frame_id = self.fixed_frame
+            t.child_frame_id = frame.name
+            t.transform.translation.x = float(oMf.translation[0])
+            t.transform.translation.y = float(oMf.translation[1])
+            t.transform.translation.z = float(oMf.translation[2])
+            t.transform.rotation.x = float(quat.x)
+            t.transform.rotation.y = float(quat.y)
+            t.transform.rotation.z = float(quat.z)
+            t.transform.rotation.w = float(quat.w)
+            transforms.append(t)
+
+        self.transform_stamped_publisher.broadcaster.sendTransform(transforms)
+        self._publish_scene_objects(q_vec, now)
+
+    def _publish_scene_objects(self, q_vec, now):
+        """Publish the joint states of the robot as HppVectorConfiguration on /hpp/scene_objects."""
+        array_msg = HppVectorConfiguration()
 
         for joint_id in range(1, self.model.njoints):
+            joint: pin.JointModel = self.model.joints[joint_id]
             name = self.model.names[joint_id]
-            idx_q, jtype, namespace, extra = self.joint_map[name]
+
+            jtype = "JOINT" if joint.nq == 1 else "FREE_FLYER"
+            idx_q = joint.idx_q
             min_val = float(self.model.lowerPositionLimit[idx_q])
             max_val = float(self.model.upperPositionLimit[idx_q])
 
-            msg = PinnochioJoint()
+            msg = PinocchioJoint()
             msg.name = name
             msg.type = jtype
             msg.min = min_val
@@ -232,47 +232,37 @@ class RVizVisualizer(BaseVisualizer):
 
             if jtype == "JOINT":
                 msg.values = [float(q_vec[idx_q])]
-                joint_states.setdefault(namespace, {})[extra] = float(q_vec[idx_q])
             elif jtype == "FREE_FLYER":
                 vals = q_vec[idx_q : idx_q + 7]
                 msg.values = vals.tolist()
-                self.freeFlyer_publisher.publish(
-                    parent_frame=self.fixed_frame,
-                    child_frame=extra,
-                    xyz=vals[:3],
-                    quat_xyzw=vals[3:],
-                )
 
             array_msg.joints.append(msg)
 
-        for namespace, joints in joint_states.items():
-            self.joint_state_publisher.publish(
-                namespace, list(joints.keys()), list(joints.values())
-            )
-        self.pinnochioJoint_pub.publish(array_msg)
+        array_msg.hpp_vector = q_vec.tolist()
+        self.pinocchioJoint_pub.publish(array_msg)
 
-    def _on_joint_receive(self, msg: PinnochioJoint):
+    def _on_joint_receive(self, msg: PinocchioJoint):
         if self.last_vector_configuration is None:
             return
 
-        entry = self.joint_map.get(msg.name)
-        if entry is None:
+        j: pin.JointModel = self.model.joints[self.model.getJointId(msg.name)]
+        if j is None:
+            print(f"Received joint name '{msg.name}' not found in model.")
             return
 
-        idx_q, jtype, _, _ = entry
         q = self.last_vector_configuration.copy()
 
-        if jtype == "FREE_FLYER":
+        if msg.type == "FREE_FLYER":
             vals = [float(v) for v in msg.values[:7]]
             quat = np.array(vals[3:7])
             norm = np.linalg.norm(quat)
             if norm > 1e-9:
                 quat /= norm
             vals[3:7] = quat.tolist()
-            q[idx_q : idx_q + 7] = vals
+            q[j.idx_q : j.idx_q + 7] = vals
 
-        elif jtype == "JOINT":
-            q[idx_q] = msg.values[0]
+        elif msg.type == "JOINT":
+            q[j.idx_q] = msg.values[0]
 
         self.display(q)
 
@@ -304,7 +294,7 @@ class RVizVisualizer(BaseVisualizer):
         dt: float = 0.05,
         topic_name: str = "hpp_path",
         origin: str = "world",
-        target_frame: str = None,
+        target_frame: str | None = None,
     ):
         if target_frame is None or target_frame == "":
             return
@@ -315,7 +305,7 @@ class RVizVisualizer(BaseVisualizer):
             )
             return
 
-        now = self.joint_state_publisher.get_clock().now().to_msg()
+        now = self.navigation_publisher.get_clock().now().to_msg()
         msg = Path()
         msg.header.frame_id = origin
         msg.header.stamp = now
@@ -344,16 +334,6 @@ class RVizVisualizer(BaseVisualizer):
 
         self.navigation_publisher.publish(path_msg=msg, topic_name=topic_name)
 
-    def playPath(self, path: core.bindings.Path, dt: float = 0.002):
-        def _play():
-            t = 0.0
-            while t <= path.length():
-                self.display(path.eval(t)[0])
-                t += dt
-                time.sleep(dt)
-
-        threading.Thread(target=_play, daemon=True).start()
-
     def printActualRvizVectorConfiguration(self, with_names: bool = True):
         if self.last_vector_configuration is None:
             print("No configuration available.")
@@ -376,7 +356,38 @@ class RVizVisualizer(BaseVisualizer):
             print(f"\t{value},{suffix}")
         print("]")
 
-    # ====================== Méthodes abstraites ======================
+# ====================== Waypoints ======================
+ 
+    def addWaypoint(self, xyz: list[float], quat_xyzw: list[float]):
+        pose = PoseStamped()
+        pose.header.frame_id = self.fixed_frame
+        pose.header.stamp = self._waypoint_node.get_clock().now().to_msg()
+        pose.pose.position.x = xyz[0]
+        pose.pose.position.y = xyz[1]
+        pose.pose.position.z = xyz[2]
+        pose.pose.orientation.x = quat_xyzw[0]
+        pose.pose.orientation.y = quat_xyzw[1]
+        pose.pose.orientation.z = quat_xyzw[2]
+        pose.pose.orientation.w = quat_xyzw[3]
+        self.waypoint_pub.publish(pose)
+        
+
+    def addWaypointFromFrame(self, target_frame: str):
+        if target_frame is None or target_frame == "":
+            return
+        frame_names = [f.name for f in self.model.frames]
+        if target_frame not in frame_names:
+            print(
+                f"⚠️ Frame '{target_frame}' not found in model.\n Available frames: {frame_names}"
+            )
+            return
+
+        frame_id = self.model.getFrameId(target_frame)
+        oMf = self.data.oMf[frame_id]
+        quat = pin.Quaternion(oMf.rotation)
+        self.addWaypoint(oMf.translation.tolist(), quat.coeffs().tolist())
+
+   # ====================== Méthodes abstraites ======================
 
     def captureImage(self, w=None, h=None):
         pass

@@ -48,10 +48,9 @@ if(USE_HPP_PYTHON)
     install_python_files("pyhpp_viser" __init__.py viewer.py)
     install_python_files("pyhpp_rviz" __init__.py viewer.py)
     install_python_files("pyhpp_rviz/publisher" __init__.py
-                       JointState.py
                        Navigation.py
-                       RobotState.py
+                       RobotDescriptionPublisher.py
                        StaticTfPublisher.py
-                       FreeFlyerPublisher.py
+                       TransformStampedPublisher.py
     )
 endif()

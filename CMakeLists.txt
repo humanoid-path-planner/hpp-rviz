@@ -62,11 +62,7 @@ project(${PROJECT_NAME} ${PROJECT_ARGS})
 
 option(USE_HPP_PYTHON "Add dependency to hpp-python" ON)
 option(USE_CORBA "Enable dependency to hpp-manipulation-corba" OFF)
-option(
-    BUILD_HPP_RVIZ_PKGS
-    "Build hpp_msgs and hpp_ros_vizualisation with colcon"
-    OFF
-)
+option(BUILD_HPP_RVIZ_PKGS "Build hpp_msgs and hpp_ros_vizualisation" OFF)
 
 if(USE_CORBA)
     add_project_dependency("hpp-corbaserver" REQUIRED)
@@ -78,10 +74,16 @@ if(USE_HPP_PYTHON)
 endif()
 
 if(BUILD_HPP_RVIZ_PKGS)
-    execute_process(
-        COMMAND colcon build
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/hpp_rviz_pkg
+    add_subdirectory(src/hpp_rviz_pkg/hpp_msgs)
+
+    # Manually expose what find_package(hpp_msgs) would have set,
+    # so the next subdirectory can use it
+    set(hpp_msgs_FOUND TRUE)
+    set(hpp_msgs_INCLUDE_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/hpp_rviz_pkg/hpp_msgs/include"
     )
+
+    add_subdirectory(src/hpp_rviz_pkg/hpp_ros_visualization)
 endif()
 
 if(NOT FINDPYTHON_ALREADY_CALLED)

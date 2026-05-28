@@ -17,21 +17,21 @@ void TrajectorySlider::onInitialize() {
       });
 
   scene_obj_sub_ =
-      node->create_subscription<hpp_msgs::msg::PinnochioJointArray>(
+      node->create_subscription<hpp_msgs::msg::HppVectorConfiguration>(
           "/hpp/scene_objects", 10,
-          [this](const hpp_msgs::msg::PinnochioJointArray::SharedPtr msg) {
+          [this](const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg) {
             onSceneObjReceive(msg);
           });
 
   target_frame_pub_ =
       node->create_publisher<hpp_msgs::msg::PathInfo>("/hpp/target_frame", 10);
 
-  joint_value_pub_ = node->create_publisher<hpp_msgs::msg::PinnochioJoint>(
-      "/hpp/pinnochio_joints", 10);
+  joint_value_pub_ = node->create_publisher<hpp_msgs::msg::PinocchioJoint>(
+      "/hpp/pinocchio_joints", 10);
 }
 
 void TrajectorySlider::onJointValueChanged(std::string name, double value) {
-  hpp_msgs::msg::PinnochioJoint msg;
+  hpp_msgs::msg::PinocchioJoint msg;
   msg.name = name;
   msg.values.push_back(static_cast<float>(value));
   msg.type = "JOINT";
@@ -52,7 +52,7 @@ void TrajectorySlider::onFreeFlyerValueChanged(std::string name, double value,
         freeflyerValues_[name][5], freeflyerValues_[name][6]};
 
     double rest = 1.0 - (q[primary_index] * q[primary_index]);
-    if (rest < 0.0) rest = 0.0;  // clamp si valeur > 1
+    if (rest < 0.0) rest = 0.0;
 
     double norm = 0.0;
     for (int i = 0; i < 4; ++i) {
@@ -62,14 +62,13 @@ void TrajectorySlider::onFreeFlyerValueChanged(std::string name, double value,
     norm = std::sqrt(norm);
 
     if (norm < 1e-9) {
-      // Cas dégénéré : les 3 autres sont à 0, on met tout sur la première
       for (int i = 0; i < 4; ++i) {
         if (i == primary_index) continue;
-        q[i] = (i == 0) ? std::sqrt(rest) : 0.0;  // première dispo prend tout
+        q[i] = (i == 0) ? std::sqrt(rest) : 0.0;
         break;
       }
     } else {
-      double scale = std::sqrt(rest) / norm;  // ✅
+      double scale = std::sqrt(rest) / norm;
       for (int i = 0; i < 4; ++i) {
         if (i == primary_index) continue;
         q[i] *= scale;
@@ -81,7 +80,6 @@ void TrajectorySlider::onFreeFlyerValueChanged(std::string name, double value,
     freeflyerValues_[name][5] = q[2];
     freeflyerValues_[name][6] = q[3];
 
-    // Mettre à jour les sliders des autres composantes
     QTreeWidgetItem* grpFF = objPosInSceneTree_[name];
     for (int i = 0; i < 4; ++i) {
       if (i == primary_index) continue;
@@ -97,7 +95,7 @@ void TrajectorySlider::onFreeFlyerValueChanged(std::string name, double value,
     }
   }
 
-  hpp_msgs::msg::PinnochioJoint msg;
+  hpp_msgs::msg::PinocchioJoint msg;
   msg.name = name;
   msg.values = {static_cast<float>(freeflyerValues_[name][0]),
                 static_cast<float>(freeflyerValues_[name][1]),
@@ -171,7 +169,22 @@ QTreeWidgetItem* TrajectorySlider::getOrCreateNamespaceItem(
 }
 
 void TrajectorySlider::onSceneObjReceive(
-    const hpp_msgs::msg::PinnochioJointArray::SharedPtr msg) {
+    const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg) {
+  
+  std::string vectorConfigurationInfo = "[";
+
+  for (float val : msg->hpp_vector) {
+    vectorConfigurationInfo += std::to_string(val) + ", ";
+  }
+  vectorConfigurationInfo.pop_back();
+  vectorConfigurationInfo.pop_back();
+  vectorConfigurationInfo += "]";
+  hpp_vector_configuration_edit_->setPlainText(
+      QString::fromStdString(vectorConfigurationInfo));
+      
+
+
+
   for (const auto& joint : msg->joints) {
     std::string name = joint.name;
     float min = joint.min;

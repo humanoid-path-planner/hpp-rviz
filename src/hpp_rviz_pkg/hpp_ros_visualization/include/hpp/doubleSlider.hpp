@@ -1,3 +1,4 @@
+
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -35,6 +36,11 @@ class DoubleSlider : public QWidget {
               slider_->blockSignals(false);
               emit valueChanged(val);
             });
+  }
+  void setRange(double min, double max) {
+    int steps = static_cast<int>((max - min) / step_);
+    slider_->setRange(0, steps);
+    spinbox_->setRange(min, max);
   }
 
   double value() const { return spinbox_->value(); }

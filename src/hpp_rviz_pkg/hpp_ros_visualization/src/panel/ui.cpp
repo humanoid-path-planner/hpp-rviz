@@ -64,6 +64,25 @@ void TrajectorySlider::initializeUi() {
   play_timer_ = new QTimer(this);
   play_timer_->setInterval(static_cast<int>(1000 / trajectoryFps));
 
+  auto* hpp_vec_header = new QHBoxLayout();
+  auto* hpp_vec_title = new QLabel("HppVectorConfiguration:", this);
+  hpp_vec_header->addWidget(hpp_vec_title);
+  hpp_vec_header->addStretch();
+  copy_button_ = new QPushButton("Copy", this);
+  copy_button_->setFixedWidth(80);
+  hpp_vec_header->addWidget(copy_button_);
+  layout->addLayout(hpp_vec_header);
+
+  hpp_vector_configuration_edit_ = new QPlainTextEdit(this);
+  hpp_vector_configuration_edit_->setReadOnly(true);
+  hpp_vector_configuration_edit_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+  hpp_vector_configuration_edit_->setMaximumHeight(80);
+  hpp_vector_configuration_edit_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  hpp_vector_configuration_edit_->setPlaceholderText("No configuration yet...");
+  layout->addWidget(hpp_vector_configuration_edit_);
+
+  
+
   /////TREEEE
   tree_ = new QTreeWidget(this);
 
@@ -116,11 +135,13 @@ QTreeWidgetItem* TrajectorySlider::createSliderTreeItem(QTreeWidgetItem* parent,
                                                         double min, double max,
                                                         double defaultVal) {
   auto* item = new QTreeWidgetItem(parent, {label});
-
   item->setSizeHint(0, QSize(0, 20));
   auto* my_slider = new DoubleSlider(min, max, computeStep(min, max), this);
   my_slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   item->setData(1, Qt::UserRole, QVariant::fromValue(my_slider));
+  my_slider->blockSignals(true);
+  my_slider->setValue(defaultVal);
+  my_slider->blockSignals(false);
   return item;
 }
 
@@ -140,18 +161,11 @@ QTreeWidgetItem* TrajectorySlider::addJointSliderItem(QTreeWidgetItem* parent,
   hbox->setMargin(0);
 
   DoubleSlider* my_slider = item->data(1, Qt::UserRole).value<DoubleSlider*>();
-
   hbox->addWidget(my_slider);
   tree_->setItemWidget(item, 1, container);
-
   connect(my_slider, QOverload<double>::of(&DoubleSlider::valueChanged),
           [this, name](double v) { onJointValueChanged(name, v); });
   item->setData(1, Qt::UserRole, QVariant::fromValue(my_slider));
-
-  my_slider->blockSignals(true);
-  my_slider->setValue(defaultVal);
-  my_slider->blockSignals(false);
-
   return item;
 }
 
@@ -185,10 +199,6 @@ void TrajectorySlider::addFreeFlyerSliderItem(
             [this, name, i](double v) { onFreeFlyerValueChanged(name, v, i); });
 
     item->setData(1, Qt::UserRole, QVariant::fromValue(my_slider));
-
-    my_slider->blockSignals(true);
-    my_slider->setValue(defaultVal[i]);
-    my_slider->blockSignals(false);
   }
 }
 

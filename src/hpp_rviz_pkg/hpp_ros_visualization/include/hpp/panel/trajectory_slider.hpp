@@ -12,13 +12,16 @@
 #include <QWidget>
 #include <hpp/doubleSlider.hpp>
 #include <hpp_msgs/msg/path_info.hpp>
-#include <hpp_msgs/msg/pinnochio_joint.hpp>
-#include <hpp_msgs/msg/pinnochio_joint_array.hpp>
+#include <hpp_msgs/msg/pinocchio_joint.hpp>
+#include <hpp_msgs/msg/hpp_vector_configuration.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/panel.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <QPlainTextEdit>
+#include <QApplication>
+#include <QClipboard>
 
 namespace hpp {
 
@@ -52,7 +55,7 @@ class TrajectorySlider : public rviz_common::Panel {
   void onJointValueChanged(std::string name, double value);
   void onFreeFlyerValueChanged(std::string name, double value, int index);
   void onSceneObjReceive(
-      const hpp_msgs::msg::PinnochioJointArray::SharedPtr msg);
+      const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg);
 
   std::map<std::string, QTreeWidgetItem*> objPosInSceneTree_;
   std::map<std::string, std::array<double, 7>> freeflyerValues_;
@@ -80,6 +83,9 @@ class TrajectorySlider : public rviz_common::Panel {
   QTreeWidget* tree_;
   QTreeWidgetItem* grpJoints_;
 
+  QPlainTextEdit* hpp_vector_configuration_edit_;
+  QPushButton* copy_button_;
+
   QTreeWidgetItem* addJointSliderItem(QTreeWidgetItem* parent,
                                       const std::string& name,
                                       const QString& label, double min,
@@ -103,10 +109,10 @@ class TrajectorySlider : public rviz_common::Panel {
   rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
   rclcpp::Publisher<hpp_msgs::msg::PathInfo>::SharedPtr time_pub_;
   rclcpp::Subscription<hpp_msgs::msg::PathInfo>::SharedPtr length_sub_;
-  rclcpp::Subscription<hpp_msgs::msg::PinnochioJointArray>::SharedPtr
+  rclcpp::Subscription<hpp_msgs::msg::HppVectorConfiguration>::SharedPtr
       scene_obj_sub_;
   rclcpp::Publisher<hpp_msgs::msg::PathInfo>::SharedPtr target_frame_pub_;
-  rclcpp::Publisher<hpp_msgs::msg::PinnochioJoint>::SharedPtr joint_value_pub_;
+  rclcpp::Publisher<hpp_msgs::msg::PinocchioJoint>::SharedPtr joint_value_pub_;
 };
 
 }  // namespace hpp
