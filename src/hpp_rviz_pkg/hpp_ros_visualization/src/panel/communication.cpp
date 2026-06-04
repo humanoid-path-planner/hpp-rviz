@@ -1,6 +1,7 @@
 #include <hpp/panel/trajectory_slider.hpp>
 
 namespace hpp {
+namespace panel {
 
 void TrajectorySlider::onInitialize() {
   node_ptr_ = getDisplayContext()->getRosNodeAbstraction();
@@ -257,4 +258,5 @@ void TrajectorySlider::onSceneObjReceive(
   }
 }
 
+}
 }  // namespace hpp

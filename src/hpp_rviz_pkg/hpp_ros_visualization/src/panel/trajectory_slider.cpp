@@ -4,6 +4,7 @@
 #include <std_msgs/msg/float64.hpp>
 
 namespace hpp {
+namespace panel {
 
 TrajectorySlider::TrajectorySlider(QWidget* parent) : Panel(parent) {
   initializeUi();
@@ -100,8 +101,8 @@ void TrajectorySlider::onComboChanged(const QString& text) {
   msg.target_frame = text.toStdString();
   target_frame_pub_->publish(msg);
 }
-
+}
 }  // namespace hpp
 
 #include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(hpp::TrajectorySlider, rviz_common::Panel)
+PLUGINLIB_EXPORT_CLASS(hpp::panel::TrajectorySlider, rviz_common::Panel)

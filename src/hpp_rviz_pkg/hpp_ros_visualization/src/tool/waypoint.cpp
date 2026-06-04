@@ -7,8 +7,7 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <rcutils/logging_macros.h>
 #include <rviz_common/viewport_mouse_event.hpp>
-#include "hpp/interactiveWaypoint.hpp"
-#include "hpp/Position3d.hpp"
+
 namespace hpp {
 namespace tool {
 
@@ -34,13 +33,47 @@ void Waypoint::onInitialize() {
 
     // Subscribe to waypoint topic for precise placement
     waypoint_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
-        "/hpp/waypoint", 10,
+        "/hpp_waypoint_server/waypoint", 10,
         std::bind(&Waypoint::onWaypointReceived, this, std::placeholders::_1));
+    
+    waypoint_visibility_sub_ = node->create_subscription<hpp_msgs::msg::HppWaypoint>(
+        "/hpp_waypoint_server/waypoint_visibility", 10, std::bind(&Waypoint::onWaypointVisibilityReceived, this, std::placeholders::_1));
 }
 
-void Waypoint::activate() {}
+void Waypoint::activate() {
+}
+void Waypoint::deactivate() {
+}
 
-void Waypoint::deactivate() {}
+
+void Waypoint::onWaypointVisibilityReceived(const hpp_msgs::msg::HppWaypoint::SharedPtr msg)
+{
+    std::string name = msg->name;
+    bool enable = msg->enable;
+    QMetaObject::invokeMethod(this, [this, name, enable]() {
+        auto it = interactive_waypoints_.find(name);
+        if (it == interactive_waypoints_.end()) {
+            RCUTILS_LOG_WARN("Waypoint '%s' not found", name.c_str());
+            return;
+        }
+
+        visualization_msgs::msg::InteractiveMarker marker_to_insert = *(it->second);
+        if (!enable) {
+            marker_to_insert.scale = 0.001f;
+            marker_to_insert.controls[0].markers[0].scale.x = 0.001f;
+            marker_to_insert.controls[0].markers[0].scale.y = 0.001f;
+            marker_to_insert.controls[0].markers[0].scale.z = 0.001f;
+        } 
+
+        server_->insert(marker_to_insert,
+            std::bind(&Waypoint::processFeedback, this, std::placeholders::_1));
+        
+        if (enable) {
+            menu_handler_.apply(*server_, marker_to_insert.name);
+        }
+        server_->applyChanges();
+    }, Qt::QueuedConnection);
+}
 
 int Waypoint::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
    if (event.leftDown()) 
@@ -68,19 +101,14 @@ int Waypoint::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
 
 void Waypoint::createInteractiveWaypoint(const geometry_msgs::msg::PoseStamped& pos)
 {
-    struct Position3d position;
-    position.x = pos.pose.position.x;
-    position.y = pos.pose.position.y;
-    position.z = pos.pose.position.z;
-    position.qx = pos.pose.orientation.x;
-    position.qy = pos.pose.orientation.y;
-    position.qz = pos.pose.orientation.z;
-    position.qw = pos.pose.orientation.w;
+    Ogre::Vector3 position(pos.pose.position.x, pos.pose.position.y, pos.pose.position.z);
+    Ogre::Quaternion orientation(pos.pose.orientation.w, pos.pose.orientation.x, pos.pose.orientation.y, pos.pose.orientation.z);
 
     const int waypoint_id = waypoint_count_++;
 
     InteractiveWaypoint int_marker(
         position,
+        orientation,
         "waypoint_" + std::to_string(waypoint_id),
         "Waypoint_" + std::to_string(waypoint_id));
 
@@ -92,6 +120,7 @@ void Waypoint::createInteractiveWaypoint(const geometry_msgs::msg::PoseStamped& 
             std::placeholders::_1));
 
     menu_handler_.apply(*server_, int_marker.name);
+    interactive_waypoints_[int_marker.name] = std::make_unique<InteractiveWaypoint>(int_marker);
     server_->applyChanges();
 }
 
@@ -102,17 +131,15 @@ void Waypoint::processFeedback(
     if (feedback->event_type ==
         visualization_msgs::msg::InteractiveMarkerFeedback::POSE_UPDATE)
     {
-        RCUTILS_LOG_INFO(
-            "Waypoint %s moved to [%.2f, %.2f, %.2f]",
-            feedback->marker_name.c_str(),
-            feedback->pose.position.x,
-            feedback->pose.position.y,
-            feedback->pose.position.z);
+        server_->setPose(feedback->marker_name, feedback->pose);
+        server_->applyChanges();
+        auto it = interactive_waypoints_.find(feedback->marker_name);
+        if (it != interactive_waypoints_.end()) {
+            it->second->pose = feedback->pose;
+        }
     }
-    else if (feedback->event_type ==
-        visualization_msgs::msg::InteractiveMarkerFeedback::MENU_SELECT)
+    else if (feedback->event_type == visualization_msgs::msg::InteractiveMarkerFeedback::MENU_SELECT)
     {
-        
         if (feedback->menu_entry_id == edit_menu_handle_)
         {
             QDialog dialog;

@@ -21,6 +21,7 @@ find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 if(NOT hpp_msgs_FOUND)
     find_package(hpp_msgs REQUIRED)
 endif()
@@ -45,31 +46,36 @@ endif()
 set(CMAKE_AUTOMOC ON)
 if(QT_VERSION_MAJOR EQUAL 6)
     qt6_wrap_cpp(MOC_FILES
-      include/hpp/plugin/trajectory.hpp
+      include/hpp/display/trajectory.hpp
       include/hpp/panel/trajectory_slider.hpp
       include/hpp/doubleSlider.hpp
       include/hpp/tool/waypoint.hpp
-      include/hpp/Position3d.hpp
-      include/hpp/interactiveWaypoint.hpp
+      include/hpp/tool/interactiveWaypoint.hpp
+      include/hpp/display/waypoint.hpp
+      include/hpp/display/WaypointProperty.hpp
+
     )
 else()
     qt5_wrap_cpp(MOC_FILES
-      include/hpp/plugin/trajectory.hpp
+      include/hpp/display/trajectory.hpp
       include/hpp/panel/trajectory_slider.hpp
       include/hpp/doubleSlider.hpp
-      include/hpp/tool/waypoint.hpp
-       include/hpp/Position3d.hpp
-      include/hpp/interactiveWaypoint.hpp
+      include/hpp/tool/waypoint.hpp     
+      include/hpp/tool/interactiveWaypoint.hpp
+      include/hpp/display/waypoint.hpp
+      include/hpp/display/WaypointProperty.hpp
+
     )
 endif()
 
 add_library(
     hpp_ros_visualization
-    src/plugin/trajectory.cpp
+    src/display/trajectory.cpp
     src/panel/trajectory_slider.cpp
     src/panel/ui.cpp
     src/panel/communication.cpp
     src/tool/waypoint.cpp
+    src/display/waypoint.cpp
     ${MOC_FILES}
 )
 
@@ -92,6 +98,7 @@ target_link_libraries(hpp_ros_visualization PRIVATE
     rviz_rendering::rviz_rendering
     ${sensor_msgs_TARGETS}
     ${std_msgs_TARGETS}
+    ${visualization_msgs_TARGETS}
     "${cpp_typesupport_target}"
 )
 
@@ -106,7 +113,7 @@ install(
 install(DIRECTORY include/ DESTINATION include)
 install(FILES rviz_common_plugins.xml DESTINATION share/${PROJECT_NAME})
 install(
-    FILES icons/Trajectory.png
+    FILES icons/Trajectory.png icons/Waypoint.png 
     DESTINATION share/${PROJECT_NAME}/icons/classes
 )
 

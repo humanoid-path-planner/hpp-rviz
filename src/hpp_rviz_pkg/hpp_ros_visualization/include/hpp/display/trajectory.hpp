@@ -10,6 +10,7 @@
 #include <rviz_default_plugins/displays/path/path_display.hpp>
 
 namespace hpp {
+namespace displays {
 class TrajectoryDisplay : public rviz_default_plugins::displays::PathDisplay {
   Q_OBJECT
  public:
@@ -20,5 +21,6 @@ class TrajectoryDisplay : public rviz_default_plugins::displays::PathDisplay {
 
  private:
 };
+}
 }  // namespace hpp
 #endif

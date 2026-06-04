@@ -24,7 +24,7 @@
 #include <QClipboard>
 
 namespace hpp {
-
+namespace panel {
 enum ObjType { FreeFlyer, Others };
 
 const double trajectoryFps = 100.0;
@@ -115,4 +115,5 @@ class TrajectorySlider : public rviz_common::Panel {
   rclcpp::Publisher<hpp_msgs::msg::PinocchioJoint>::SharedPtr joint_value_pub_;
 };
 
+}
 }  // namespace hpp

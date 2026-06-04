@@ -9,8 +9,9 @@
 #include <rviz_common/interaction/selection_manager.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <OgreVector3.h>
+#include <OgreQuaternion.h>
 #include <geometry_msgs/msg/point_stamped.hpp>
-#include "hpp/Position3d.hpp"
+
 namespace hpp {
 
 class InteractiveWaypoint : public visualization_msgs::msg::InteractiveMarker
@@ -18,7 +19,8 @@ class InteractiveWaypoint : public visualization_msgs::msg::InteractiveMarker
     public:
         InteractiveWaypoint() = default;
         InteractiveWaypoint(
-            const Position3d& pos,
+            const Ogre::Vector3& pos,
+            const Ogre::Quaternion& orient,
             const std::string& name = "waypoint",
             const std::string& description = "hpp waypoint")
         {
@@ -30,10 +32,10 @@ class InteractiveWaypoint : public visualization_msgs::msg::InteractiveMarker
             this->pose.position.x = pos.x;
             this->pose.position.y = pos.y;
             this->pose.position.z = pos.z;
-            this->pose.orientation.x = pos.qx;
-            this->pose.orientation.y = pos.qy;
-            this->pose.orientation.z = pos.qz;
-            this->pose.orientation.w = pos.qw;
+            this->pose.orientation.x = orient.x;
+            this->pose.orientation.y = orient.y;
+            this->pose.orientation.z = orient.z;
+            this->pose.orientation.w = orient.w;
 
             visualization_msgs::msg::InteractiveMarkerControl visual_control;
             visual_control.always_visible = true;
@@ -71,26 +73,23 @@ class InteractiveWaypoint : public visualization_msgs::msg::InteractiveMarker
         }
 
         bool isActivated() const { return activated_; }
-        struct Position3d getPosition() const
+        Ogre::Vector3 getPosition() const
         {
-            struct Position3d pos;
-            pos.x = this->pose.position.x;
-            pos.y = this->pose.position.y;
-            pos.z = this->pose.position.z;
-            pos.qx = this->pose.orientation.x;
-            pos.qy = this->pose.orientation.y;
-            pos.qz = this->pose.orientation.z;
-            pos.qw = this->pose.orientation.w;
-            return pos;
+            return Ogre::Vector3(this->pose.position.x, this->pose.position.y, this->pose.position.z);
         }
-        void setPosition(const struct Position3d& pos) {
+        Ogre::Quaternion getOrientation() const
+        {
+            return Ogre::Quaternion(this->pose.orientation.w, this->pose.orientation.x, this->pose.orientation.y, this->pose.orientation.z);
+        }
+
+        void setPosition(const Ogre::Vector3& pos, const Ogre::Quaternion& orient) {
             this->pose.position.x = pos.x;
             this->pose.position.y = pos.y;
             this->pose.position.z = pos.z;
-            this->pose.orientation.x = pos.qx;
-            this->pose.orientation.y = pos.qy;
-            this->pose.orientation.z = pos.qz;
-            this->pose.orientation.w = pos.qw;
+            this->pose.orientation.x = orient.x;
+            this->pose.orientation.y = orient.y;
+            this->pose.orientation.z = orient.z;
+            this->pose.orientation.w = orient.w;
         }
      
     private:

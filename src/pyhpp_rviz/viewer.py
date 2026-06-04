@@ -51,6 +51,14 @@ class RVizVisualizer(BaseVisualizer):
 
         self.description_publishers = {}
 
+        self.graph = None
+        self.problem = None
+        self._graph_thread = None
+        self._react_graph_viewer_port = 6789
+        self._react_graph_viewer_host = "localhost"
+        self._web_socket_bridge_port = 8765
+        self._web_socket_bridge_host = "localhost"
+
     # ====================== Init ======================
 
     def initViewer(self, robot: Device = None):
@@ -100,7 +108,7 @@ class RVizVisualizer(BaseVisualizer):
             PathInfo, "/hpp/pathInfo", 10
         )
         self.waypoint_pub = self._waypoint_node.create_publisher(
-            PoseStamped, "/hpp/waypoint", 10
+            PoseStamped, "/hpp_waypoint_server/waypoint", 10
         )
 
     def _init_executor(self):
@@ -209,9 +217,9 @@ class RVizVisualizer(BaseVisualizer):
             transforms.append(t)
 
         self.transform_stamped_publisher.broadcaster.sendTransform(transforms)
-        self._publish_scene_objects(q_vec, now)
+        self._publish_joint_states(q_vec, now)
 
-    def _publish_scene_objects(self, q_vec, now):
+    def _publish_joint_states(self, q_vec, now):
         """Publish the joint states of the robot as HppVectorConfiguration on /hpp/scene_objects."""
         array_msg = HppVectorConfiguration()
 
@@ -374,7 +382,7 @@ class RVizVisualizer(BaseVisualizer):
 
     def addWaypointFromFrame(self, target_frame: str):
         if target_frame is None or target_frame == "":
-            return
+            return 
         frame_names = [f.name for f in self.model.frames]
         if target_frame not in frame_names:
             print(
@@ -386,6 +394,76 @@ class RVizVisualizer(BaseVisualizer):
         oMf = self.data.oMf[frame_id]
         quat = pin.Quaternion(oMf.rotation)
         self.addWaypoint(oMf.translation.tolist(), quat.coeffs().tolist())
+
+# ====================== Graph Viewer ======================
+    def setProblem(self, problem):
+        """Set problem for graph viewer integration.
+
+        Args:
+            problem: PyWProblem from pyhpp.manipulation
+        """
+        self.problem = problem
+        self._publish_viewer_snapshot(self.graph, self.problem)
+
+    def setGraph(self, graph):
+        """Set constraint graph for graph viewer integration.
+
+        Args:
+            graph: PyWGraph from pyhpp.manipulation
+        """
+        self.graph = graph
+        self._publish_viewer_snapshot(self.graph, None)
+    
+    def _publish_viewer_snapshot(self, graph=None, problem=None):
+        """Send the current graph/problem snapshot to the React app if available."""
+        if self._graph_thread is None or not self._graph_thread.is_alive():
+            print("Graph viewer thread not running, cannot publish viewer snapshot.")
+            return
+        self._graph_thread.send_viewer_snapshot(graph, problem)
+
+    def launch_graph_viewer(self):
+        """Launch hpp-plot graph viewer in separate thread."""
+        if self.graph is None:
+            print("No constraint graph set. Use viewer.setGraph(graph)")
+            return
+        if self.problem is None:
+            print("No problem set. Use viewer.setProblem(problem)")
+            return
+
+        try:
+            if self._graph_thread is not None and self._graph_thread.is_alive():
+                print("Graph viewer thread is already running")
+                return
+            from pyhpp_plot import GraphViewerThread
+
+            thread = GraphViewerThread(
+                self.graph,
+                self.problem,
+                self._on_config_generated,
+                react_port=self._react_graph_viewer_port,
+                react_host=self._react_graph_viewer_host,
+                ws_port=self._web_socket_bridge_port,
+                ws_host=self._web_socket_bridge_host,
+                start_qt_viewer=False,
+            )
+            self._graph_thread = thread
+            thread.start()
+        except Exception as exc:
+            print(f"Failed to launch graph viewer: {exc}")
+            pass
+    
+    def _on_config_generated(self, config, label):
+        """Called from graph viewer thread when config is generated."""
+        self.last_vector_configuration = config
+        self.display(config)
+    
+    def sendConfigToGraphViewer(self, config=None):
+        if config is not None:
+            self._graph_thread.sendConfig(config)
+        elif self.last_vector_configuration is not None:
+            self._graph_thread.sendConfig(self.last_vector_configuration)
+        else:
+            print("No configuration available to send to graph viewer.")
 
    # ====================== Méthodes abstraites ======================
 

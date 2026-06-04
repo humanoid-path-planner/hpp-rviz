@@ -1,6 +1,7 @@
 #include <hpp/panel/trajectory_slider.hpp>
 
 namespace hpp {
+namespace panel {
 
 void TrajectorySlider::initializeUi() {
   const auto layout = new QVBoxLayout(this);
@@ -202,4 +203,5 @@ void TrajectorySlider::addFreeFlyerSliderItem(
   }
 }
 
+}
 }  // namespace hpp
