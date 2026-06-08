@@ -53,7 +53,7 @@ void Waypoint::onInitialize() {
     waypoint_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
         "/hpp_waypoint_server/waypoint", 10,
         std::bind(&Waypoint::onWaypointReceived, this, std::placeholders::_1));
-    
+
     waypoint_visibility_sub_ = node->create_subscription<hpp_gepetto_viewer::msg::HppWaypoint>(
         "/hpp_waypoint_server/waypoint_visibility", 10, std::bind(&Waypoint::onWaypointVisibilityReceived, this, std::placeholders::_1));
 >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/tool/waypoint.cpp

@@ -1,6 +1,7 @@
+#include "../../include/hpp/panel/trajectory_slider.hpp"
+
 #include <QHBoxLayout>
 #include <QVBoxLayout>
-#include "../../include/hpp/panel/trajectory_slider.hpp"
 #include <std_msgs/msg/float64.hpp>
 
 namespace hpp {

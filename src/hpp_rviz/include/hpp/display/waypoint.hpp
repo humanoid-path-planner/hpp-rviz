@@ -17,45 +17,45 @@
 
 <<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/include/hpp/display/waypoint.hpp
 =======
-#include "WaypointProperty.hpp"
 #include <hpp_gepetto_viewer/msg/hpp_waypoint.hpp>
 
+#include "WaypointProperty.hpp"
 
->>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/display/waypoint.hpp
-namespace hpp {
+    >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/display/waypoint.hpp namespace hpp {
 
-namespace displays {
-class WaypointDisplay
-    : public rviz_default_plugins::displays::InteractiveMarkerDisplay {
-  Q_OBJECT
- public:
-  WaypointDisplay() = default;
-  ~WaypointDisplay() = default;
+  namespace displays {
+  class WaypointDisplay
+      : public rviz_default_plugins::displays::InteractiveMarkerDisplay {
+    Q_OBJECT
+   public:
+    WaypointDisplay() = default;
+    ~WaypointDisplay() = default;
 
-  void onInitialize() override;
+    void onInitialize() override;
 
- private:
-  void onWaypointEnabledChanged(const std::string& name, bool enabled);
-  void onUpdateMessage(
-      const visualization_msgs::msg::InteractiveMarkerUpdate::SharedPtr msg);
+   private:
+    void onWaypointEnabledChanged(const std::string& name, bool enabled);
+    void onUpdateMessage(
+        const visualization_msgs::msg::InteractiveMarkerUpdate::SharedPtr msg);
 
-  std::map<std::string, std::unique_ptr<WaypointProperty>> waypoint_properties_;
+    std::map<std::string, std::unique_ptr<WaypointProperty>>
+        waypoint_properties_;
 
-  rviz_common::properties::Property* group_property_{nullptr};
+    rviz_common::properties::Property* group_property_{nullptr};
 
-  rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
+    rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
 
 <<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/include/hpp/display/waypoint.hpp
-  rclcpp::Subscription<
-      visualization_msgs::msg::InteractiveMarkerUpdate>::SharedPtr update_sub_;
-  rclcpp::Publisher<hpp_msgs::msg::HppWaypoint>::SharedPtr
+    rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerUpdate>::
+        SharedPtr update_sub_;
+    rclcpp::Publisher<hpp_msgs::msg::HppWaypoint>::SharedPtr
 =======
-  rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerUpdate>::SharedPtr
-      update_sub_;
-  rclcpp::Publisher<hpp_gepetto_viewer::msg::HppWaypoint>::SharedPtr
+    rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerUpdate>::
+        SharedPtr update_sub_;
+    rclcpp::Publisher<hpp_gepetto_viewer::msg::HppWaypoint>::SharedPtr
 >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/display/waypoint.hpp
-      waypoint_visiblilty_pub_;
-};
+        waypoint_visiblilty_pub_;
+  };
 
-}  // namespace displays
+  }  // namespace displays
 }  // namespace hpp

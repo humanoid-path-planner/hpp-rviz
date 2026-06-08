@@ -15,72 +15,81 @@
 #include <rviz_common/tool.hpp>
 #include <visualization_msgs/msg/interactive_marker.hpp>
 
-=======
+    =======
 #include <hpp_gepetto_viewer/msg/hpp_waypoint.hpp>
->>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/tool/waypoint.hpp
+    >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/tool/waypoint.hpp
 #include "interactiveWaypoint.hpp"
 
-namespace hpp {
-namespace tool {
+    namespace hpp {
+  namespace tool {
 
-class Waypoint : public rviz_common::Tool {
-  Q_OBJECT
- public:
-  Waypoint();
-  ~Waypoint();
+  class Waypoint : public rviz_common::Tool {
+    Q_OBJECT
+   public:
+    Waypoint();
+    ~Waypoint();
 
 <<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/include/hpp/tool/waypoint.hpp
-  void onInitialize() override;
-  void activate() override;
-  void deactivate() override;
-  int processMouseEvent(rviz_common::ViewportMouseEvent& event) override;
+    void onInitialize() override;
+    void activate() override;
+    void deactivate() override;
+    int processMouseEvent(rviz_common::ViewportMouseEvent& event) override;
 
- private:
-  std::map<std::string, std::unique_ptr<InteractiveWaypoint>>
-      interactive_waypoints_;
-  rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
-  std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
-  interactive_markers::MenuHandler menu_handler_;
-  interactive_markers::MenuHandler::EntryHandle edit_menu_handle_;
-  interactive_markers::MenuHandler::EntryHandle delete_menu_handle_;
-  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr
-      waypoint_sub_;
-  rclcpp::Subscription<hpp_msgs::msg::HppWaypoint>::SharedPtr
-      waypoint_visibility_sub_;
-  int waypoint_count_ = 0;
+   private:
+    std::map<std::string, std::unique_ptr<InteractiveWaypoint>>
+        interactive_waypoints_;
+    rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
+    std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
+    interactive_markers::MenuHandler menu_handler_;
+    interactive_markers::MenuHandler::EntryHandle edit_menu_handle_;
+    interactive_markers::MenuHandler::EntryHandle delete_menu_handle_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr
+        waypoint_sub_;
+    rclcpp::Subscription<hpp_msgs::msg::HppWaypoint>::SharedPtr
+        waypoint_visibility_sub_;
+    int waypoint_count_ = 0;
 =======
-        void onInitialize() override;
-        void activate() override;
-        void deactivate() override;
-        int processMouseEvent(rviz_common::ViewportMouseEvent& event) override;
-    private:
-        std::map<std::string, std::unique_ptr<InteractiveWaypoint>> interactive_waypoints_;
-        rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
-        std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
-        interactive_markers::MenuHandler menu_handler_;
-        interactive_markers::MenuHandler::EntryHandle edit_menu_handle_;
-        interactive_markers::MenuHandler::EntryHandle delete_menu_handle_;
-        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_;
-        rclcpp::Subscription<hpp_gepetto_viewer::msg::HppWaypoint>::SharedPtr waypoint_visibility_sub_;
-        int waypoint_count_ = 0;
+    void onInitialize() override;
+    void activate() override;
+    void deactivate() override;
+    int processMouseEvent(rviz_common::ViewportMouseEvent& event) override;
 
-        void onWaypointVisibilityReceived(const hpp_gepetto_viewer::msg::HppWaypoint::SharedPtr msg);
-        void createInteractiveWaypoint(const geometry_msgs::msg::PoseStamped& pos);
-        void processFeedback(const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr& feedback);
-        void onWaypointReceived(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+   private:
+    std::map<std::string, std::unique_ptr<InteractiveWaypoint>>
+        interactive_waypoints_;
+    rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
+    std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
+    interactive_markers::MenuHandler menu_handler_;
+    interactive_markers::MenuHandler::EntryHandle edit_menu_handle_;
+    interactive_markers::MenuHandler::EntryHandle delete_menu_handle_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr
+        waypoint_sub_;
+    rclcpp::Subscription<hpp_gepetto_viewer::msg::HppWaypoint>::SharedPtr
+        waypoint_visibility_sub_;
+    int waypoint_count_ = 0;
+
+    void onWaypointVisibilityReceived(
+        const hpp_gepetto_viewer::msg::HppWaypoint::SharedPtr msg);
+    void createInteractiveWaypoint(const geometry_msgs::msg::PoseStamped& pos);
+    void processFeedback(
+        const visualization_msgs::msg::InteractiveMarkerFeedback::
+            ConstSharedPtr& feedback);
+    void onWaypointReceived(
+        const geometry_msgs::msg::PoseStamped::SharedPtr msg);
 >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/tool/waypoint.hpp
 
-  void onWaypointVisibilityReceived(
-      const hpp_msgs::msg::HppWaypoint::SharedPtr msg);
-  void createInteractiveWaypoint(const geometry_msgs::msg::PoseStamped& pos);
-  void processFeedback(
-      const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr&
-          feedback);
-  void onWaypointReceived(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+    void onWaypointVisibilityReceived(
+        const hpp_msgs::msg::HppWaypoint::SharedPtr msg);
+    void createInteractiveWaypoint(const geometry_msgs::msg::PoseStamped& pos);
+    void processFeedback(
+        const visualization_msgs::msg::InteractiveMarkerFeedback::
+            ConstSharedPtr& feedback);
+    void onWaypointReceived(
+        const geometry_msgs::msg::PoseStamped::SharedPtr msg);
 
- private slots:
-  void applyVisibilityUpdate(const QString& name, bool enable);
-};
+   private slots:
+    void applyVisibilityUpdate(const QString& name, bool enable);
+  };
 
-}  // namespace tool
+  }  // namespace tool
 }  // namespace hpp

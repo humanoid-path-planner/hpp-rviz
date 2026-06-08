@@ -54,8 +54,8 @@ void WaypointDisplay::onInitialize() {
                 std::placeholders::_1));
 =======
       std::bind(&WaypointDisplay::onUpdateMessage, this, std::placeholders::_1));
-    
-  
+
+
   waypoint_visiblilty_pub_ = node->create_publisher<hpp_gepetto_viewer::msg::HppWaypoint>(server_topic + "/waypoint_visibility", 10);
 >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/display/waypoint.cpp
 

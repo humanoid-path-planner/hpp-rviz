@@ -90,7 +90,8 @@ if(BUILD_HPP_RVIZ_PKGS)
     ament_export_dependencies(rosidl_default_runtime)
 
     rosidl_get_typesupport_target(cpp_typesupport_target
-        ${HPP_RVIZ_MSG_TARGET} rosidl_typesupport_cpp)
+        ${HPP_RVIZ_MSG_TARGET} rosidl_typesupport_cpp
+    )
 
     find_package(ament_cmake_ros REQUIRED)
     find_package(pluginlib REQUIRED)
@@ -100,9 +101,9 @@ if(BUILD_HPP_RVIZ_PKGS)
     find_package(sensor_msgs REQUIRED)
     find_package(visualization_msgs REQUIRED)
 
-    set(HPP_RVIZ_PLUGIN_TARGET "${PROJECT_NAME}_plugin") 
+    set(HPP_RVIZ_PLUGIN_TARGET "${PROJECT_NAME}_plugin")
 
-    set (MOC_FILE_TMP
+    set(MOC_FILE_TMP
         src/hpp_rviz/include/hpp/display/trajectory.hpp
         src/hpp_rviz/include/hpp/panel/trajectory_slider.hpp
         src/hpp_rviz/include/hpp/doubleSlider.hpp
@@ -118,7 +119,8 @@ if(BUILD_HPP_RVIZ_PKGS)
         qt5_wrap_cpp(MOC_FILES ${MOC_FILE_TMP})
     endif()
 
-    add_library(${HPP_RVIZ_PLUGIN_TARGET} 
+    add_library(
+        ${HPP_RVIZ_PLUGIN_TARGET}
         src/hpp_rviz/src/display/trajectory.cpp
         src/hpp_rviz/src/panel/trajectory_slider.cpp
         src/hpp_rviz/src/panel/ui.cpp
@@ -128,7 +130,8 @@ if(BUILD_HPP_RVIZ_PKGS)
         ${MOC_FILES}
     )
 
-    target_link_libraries(${HPP_RVIZ_PLUGIN_TARGET}
+    target_link_libraries(
+        ${HPP_RVIZ_PLUGIN_TARGET}
         PRIVATE
             pluginlib::pluginlib
             rviz_common::rviz_common
@@ -159,9 +162,11 @@ if(BUILD_HPP_RVIZ_PKGS)
     pluginlib_export_plugin_description_file(rviz_common rviz_common_plugins.xml)
 else()
     add_library(${PROJECT_NAME} INTERFACE)
-    install(TARGETS ${PROJECT_NAME}
-            EXPORT ${PROJECT_NAME}Targets
-            DESTINATION lib)
+    install(
+        TARGETS ${PROJECT_NAME}
+        EXPORT ${PROJECT_NAME}Targets
+        DESTINATION lib
+    )
 endif()
 
 add_subdirectory(src)
