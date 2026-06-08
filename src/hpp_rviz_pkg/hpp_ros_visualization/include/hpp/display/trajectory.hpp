@@ -21,6 +21,6 @@ class TrajectoryDisplay : public rviz_default_plugins::displays::PathDisplay {
 
  private:
 };
-}
+}  // namespace displays
 }  // namespace hpp
 #endif

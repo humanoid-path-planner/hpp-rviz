@@ -1,9 +1,9 @@
 #pragma once
-#include <mutex>
-#include <string>
+#include <hpp/display/WaypointProperty.hpp>
+#include <hpp_msgs/msg/hpp_waypoint.hpp>
 #include <map>
 #include <memory>
-
+#include <mutex>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/display.hpp>
 #include <rviz_common/display_context.hpp>
@@ -11,17 +11,15 @@
 #include <rviz_common/properties/string_property.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
 #include <rviz_default_plugins/displays/interactive_markers/interactive_marker_display.hpp>
+#include <string>
 #include <visualization_msgs/msg/interactive_marker_init.hpp>
 #include <visualization_msgs/msg/interactive_marker_update.hpp>
-
-#include <hpp/display/WaypointProperty.hpp>
-#include <hpp_msgs/msg/hpp_waypoint.hpp>
-
 
 namespace hpp {
 
 namespace displays {
-class WaypointDisplay : public rviz_default_plugins::displays::InteractiveMarkerDisplay {
+class WaypointDisplay
+    : public rviz_default_plugins::displays::InteractiveMarkerDisplay {
   Q_OBJECT
  public:
   WaypointDisplay() = default;
@@ -31,20 +29,19 @@ class WaypointDisplay : public rviz_default_plugins::displays::InteractiveMarker
 
  private:
   void onWaypointEnabledChanged(const std::string& name, bool enabled);
-  void onUpdateMessage(const visualization_msgs::msg::InteractiveMarkerUpdate::SharedPtr msg);
+  void onUpdateMessage(
+      const visualization_msgs::msg::InteractiveMarkerUpdate::SharedPtr msg);
 
   std::map<std::string, std::unique_ptr<WaypointProperty>> waypoint_properties_;
 
   rviz_common::properties::Property* group_property_{nullptr};
 
-
   rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
 
-  rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerUpdate>::SharedPtr
-      update_sub_;
+  rclcpp::Subscription<
+      visualization_msgs::msg::InteractiveMarkerUpdate>::SharedPtr update_sub_;
   rclcpp::Publisher<hpp_msgs::msg::HppWaypoint>::SharedPtr
       waypoint_visiblilty_pub_;
-
 };
 
 }  // namespace displays

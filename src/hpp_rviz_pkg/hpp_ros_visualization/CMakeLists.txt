@@ -53,18 +53,16 @@ if(QT_VERSION_MAJOR EQUAL 6)
       include/hpp/tool/interactiveWaypoint.hpp
       include/hpp/display/waypoint.hpp
       include/hpp/display/WaypointProperty.hpp
-
     )
 else()
     qt5_wrap_cpp(MOC_FILES
       include/hpp/display/trajectory.hpp
       include/hpp/panel/trajectory_slider.hpp
       include/hpp/doubleSlider.hpp
-      include/hpp/tool/waypoint.hpp     
+      include/hpp/tool/waypoint.hpp
       include/hpp/tool/interactiveWaypoint.hpp
       include/hpp/display/waypoint.hpp
       include/hpp/display/WaypointProperty.hpp
-
     )
 endif()
 
@@ -86,20 +84,21 @@ target_include_directories(
         $<INSTALL_INTERFACE:include>
 )
 
-
-
 rosidl_get_typesupport_target(cpp_typesupport_target
-    hpp_msgs "rosidl_typesupport_cpp")
+    hpp_msgs "rosidl_typesupport_cpp"
+)
 
-target_link_libraries(hpp_ros_visualization PRIVATE
-    pluginlib::pluginlib
-    rviz_common::rviz_common
-    rviz_default_plugins::rviz_default_plugins
-    rviz_rendering::rviz_rendering
-    ${sensor_msgs_TARGETS}
-    ${std_msgs_TARGETS}
-    ${visualization_msgs_TARGETS}
-    "${cpp_typesupport_target}"
+target_link_libraries(
+    hpp_ros_visualization
+    PRIVATE
+        pluginlib::pluginlib
+        rviz_common::rviz_common
+        rviz_default_plugins::rviz_default_plugins
+        rviz_rendering::rviz_rendering
+        ${sensor_msgs_TARGETS}
+        ${std_msgs_TARGETS}
+        ${visualization_msgs_TARGETS}
+        "${cpp_typesupport_target}"
 )
 
 install(
@@ -113,7 +112,7 @@ install(
 install(DIRECTORY include/ DESTINATION include)
 install(FILES rviz_common_plugins.xml DESTINATION share/${PROJECT_NAME})
 install(
-    FILES icons/Trajectory.png icons/Waypoint.png 
+    FILES icons/Trajectory.png icons/Waypoint.png
     DESTINATION share/${PROJECT_NAME}/icons/classes
 )
 

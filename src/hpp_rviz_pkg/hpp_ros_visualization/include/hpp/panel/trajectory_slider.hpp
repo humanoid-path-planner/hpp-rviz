@@ -1,27 +1,27 @@
 #pragma once
+#include <QApplication>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSlider>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QWidget>
 #include <hpp/doubleSlider.hpp>
+#include <hpp_msgs/msg/hpp_vector_configuration.hpp>
 #include <hpp_msgs/msg/path_info.hpp>
 #include <hpp_msgs/msg/pinocchio_joint.hpp>
-#include <hpp_msgs/msg/hpp_vector_configuration.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/panel.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
-#include <QPlainTextEdit>
-#include <QApplication>
-#include <QClipboard>
 
 namespace hpp {
 namespace panel {
@@ -115,5 +115,5 @@ class TrajectorySlider : public rviz_common::Panel {
   rclcpp::Publisher<hpp_msgs::msg::PinocchioJoint>::SharedPtr joint_value_pub_;
 };
 
-}
+}  // namespace panel
 }  // namespace hpp

@@ -86,7 +86,6 @@ class RVizVisualizer(BaseVisualizer):
         self._path_node = Node("hpp_pinocchio_path_publisher")
         self._waypoint_node = Node("hpp_waypoint_publisher")
 
-
         # Subscriptions
         self._joints_node.create_subscription(
             PinocchioJoint, "/hpp/pinocchio_joints", self._on_joint_receive, 10
@@ -120,7 +119,7 @@ class RVizVisualizer(BaseVisualizer):
             self.transform_stamped_publisher,
             self._joints_node,
             self._path_node,
-            self._waypoint_node
+            self._waypoint_node,
         ]:
             self._executor.add_node(node)
 
@@ -364,8 +363,8 @@ class RVizVisualizer(BaseVisualizer):
             print(f"\t{value},{suffix}")
         print("]")
 
-# ====================== Waypoints ======================
- 
+    # ====================== Waypoints ======================
+
     def addWaypoint(self, xyz: list[float], quat_xyzw: list[float]):
         pose = PoseStamped()
         pose.header.frame_id = self.fixed_frame
@@ -378,11 +377,10 @@ class RVizVisualizer(BaseVisualizer):
         pose.pose.orientation.z = quat_xyzw[2]
         pose.pose.orientation.w = quat_xyzw[3]
         self.waypoint_pub.publish(pose)
-        
 
     def addWaypointFromFrame(self, target_frame: str):
         if target_frame is None or target_frame == "":
-            return 
+            return
         frame_names = [f.name for f in self.model.frames]
         if target_frame not in frame_names:
             print(
@@ -395,7 +393,7 @@ class RVizVisualizer(BaseVisualizer):
         quat = pin.Quaternion(oMf.rotation)
         self.addWaypoint(oMf.translation.tolist(), quat.coeffs().tolist())
 
-# ====================== Graph Viewer ======================
+    # ====================== Graph Viewer ======================
     def setProblem(self, problem):
         """Set problem for graph viewer integration.
 
@@ -413,7 +411,7 @@ class RVizVisualizer(BaseVisualizer):
         """
         self.graph = graph
         self._publish_viewer_snapshot(self.graph, None)
-    
+
     def _publish_viewer_snapshot(self, graph=None, problem=None):
         """Send the current graph/problem snapshot to the React app if available."""
         if self._graph_thread is None or not self._graph_thread.is_alive():
@@ -451,12 +449,12 @@ class RVizVisualizer(BaseVisualizer):
         except Exception as exc:
             print(f"Failed to launch graph viewer: {exc}")
             pass
-    
+
     def _on_config_generated(self, config, label):
         """Called from graph viewer thread when config is generated."""
         self.last_vector_configuration = config
         self.display(config)
-    
+
     def sendConfigToGraphViewer(self, config=None):
         if config is not None:
             self._graph_thread.sendConfig(config)
@@ -465,7 +463,7 @@ class RVizVisualizer(BaseVisualizer):
         else:
             print("No configuration available to send to graph viewer.")
 
-   # ====================== Méthodes abstraites ======================
+    # ====================== Méthodes abstraites ======================
 
     def captureImage(self, w=None, h=None):
         pass

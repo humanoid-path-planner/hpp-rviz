@@ -78,11 +78,10 @@ void TrajectorySlider::initializeUi() {
   hpp_vector_configuration_edit_->setReadOnly(true);
   hpp_vector_configuration_edit_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
   hpp_vector_configuration_edit_->setMaximumHeight(80);
-  hpp_vector_configuration_edit_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  hpp_vector_configuration_edit_->setSizePolicy(QSizePolicy::Expanding,
+                                                QSizePolicy::Fixed);
   hpp_vector_configuration_edit_->setPlaceholderText("No configuration yet...");
   layout->addWidget(hpp_vector_configuration_edit_);
-
-  
 
   /////TREEEE
   tree_ = new QTreeWidget(this);
@@ -203,5 +202,5 @@ void TrajectorySlider::addFreeFlyerSliderItem(
   }
 }
 
-}
+}  // namespace panel
 }  // namespace hpp

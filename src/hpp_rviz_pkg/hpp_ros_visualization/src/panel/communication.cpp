@@ -171,7 +171,6 @@ QTreeWidgetItem* TrajectorySlider::getOrCreateNamespaceItem(
 
 void TrajectorySlider::onSceneObjReceive(
     const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg) {
-  
   std::string vectorConfigurationInfo = "[";
 
   for (float val : msg->hpp_vector) {
@@ -182,9 +181,6 @@ void TrajectorySlider::onSceneObjReceive(
   vectorConfigurationInfo += "]";
   hpp_vector_configuration_edit_->setPlainText(
       QString::fromStdString(vectorConfigurationInfo));
-      
-
-
 
   for (const auto& joint : msg->joints) {
     std::string name = joint.name;
@@ -258,5 +254,5 @@ void TrajectorySlider::onSceneObjReceive(
   }
 }
 
-}
+}  // namespace panel
 }  // namespace hpp

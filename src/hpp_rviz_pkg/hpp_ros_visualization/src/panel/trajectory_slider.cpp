@@ -20,10 +20,10 @@ TrajectorySlider::TrajectorySlider(QWidget* parent) : Panel(parent) {
   connect(target_frame_selector_, &QComboBox::currentTextChanged, this,
           &TrajectorySlider::onComboChanged);
   connect(copy_button_, &QPushButton::clicked, [this]() {
-      QApplication::clipboard()->setText(
-          hpp_vector_configuration_edit_->toPlainText());
-      copy_button_->setText("Copied");
-      QTimer::singleShot(1000, this, [this]() { copy_button_->setText("Copy"); });
+    QApplication::clipboard()->setText(
+        hpp_vector_configuration_edit_->toPlainText());
+    copy_button_->setText("Copied");
+    QTimer::singleShot(1000, this, [this]() { copy_button_->setText("Copy"); });
   });
 }
 
@@ -101,7 +101,7 @@ void TrajectorySlider::onComboChanged(const QString& text) {
   msg.target_frame = text.toStdString();
   target_frame_pub_->publish(msg);
 }
-}
+}  // namespace panel
 }  // namespace hpp
 
 #include <pluginlib/class_list_macros.hpp>
