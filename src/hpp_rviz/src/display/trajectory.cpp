@@ -1,5 +1,5 @@
 
-#include <hpp/display/trajectory.hpp>
+#include "../../include/hpp/display/trajectory.hpp"
 
 namespace hpp {
 namespace displays {

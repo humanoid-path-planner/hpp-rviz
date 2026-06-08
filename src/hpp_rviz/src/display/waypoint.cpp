@@ -1,3 +1,8 @@
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/display/waypoint.cpp
+=======
+#include "../../include/hpp/display/waypoint.hpp"
+
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/display/waypoint.cpp
 #include <QMetaObject>
 #include <QStringList>
 #include <hpp/display/waypoint.hpp>
@@ -44,8 +49,15 @@ void WaypointDisplay::onInitialize() {
   update_sub_ = node->create_subscription<
       visualization_msgs::msg::InteractiveMarkerUpdate>(
       server_topic + "/update", update_qos,
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/display/waypoint.cpp
       std::bind(&WaypointDisplay::onUpdateMessage, this,
                 std::placeholders::_1));
+=======
+      std::bind(&WaypointDisplay::onUpdateMessage, this, std::placeholders::_1));
+    
+  
+  waypoint_visiblilty_pub_ = node->create_publisher<hpp_gepetto_viewer::msg::HppWaypoint>(server_topic + "/waypoint_visibility", 10);
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/display/waypoint.cpp
 
   waypoint_visiblilty_pub_ = node->create_publisher<hpp_msgs::msg::HppWaypoint>(
       server_topic + "/waypoint_visibility", 10);
@@ -54,6 +66,7 @@ void WaypointDisplay::onInitialize() {
             "Listening for interactive marker updates.");
 }
 
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/display/waypoint.cpp
 void WaypointDisplay::onWaypointEnabledChanged(const std::string& name,
                                                bool enabled) {
   RCUTILS_LOG_INFO("Waypoint '%s' enabled changed to %s", name.c_str(),
@@ -64,6 +77,22 @@ void WaypointDisplay::onWaypointEnabledChanged(const std::string& name,
   msg.name = name;
   msg.enable = enabled;
   waypoint_visiblilty_pub_->publish(msg);
+=======
+
+void WaypointDisplay::onWaypointEnabledChanged(
+    const std::string& name,
+    bool enabled)
+{
+   RCUTILS_LOG_INFO( "Waypoint '%s' enabled changed to %s", name.c_str(), enabled ? "true" : "false");
+    auto it = waypoint_properties_.find(name);
+    if (it == waypoint_properties_.end())
+        return;
+    hpp_gepetto_viewer::msg::HppWaypoint msg;
+    msg.name = name;
+    msg.enable = enabled;
+    waypoint_visiblilty_pub_->publish(msg);
+
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/display/waypoint.cpp
 }
 
 void WaypointDisplay::onUpdateMessage(

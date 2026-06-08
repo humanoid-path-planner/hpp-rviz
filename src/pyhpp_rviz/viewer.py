@@ -5,7 +5,7 @@ import pinocchio as pin
 import pyhpp.core as core
 import rclpy
 from geometry_msgs.msg import PoseStamped, TransformStamped
-from hpp_msgs.msg import PathInfo, PinocchioJoint, HppVectorConfiguration
+from hpp_gepetto_viewer.msg import PathInfo, PinocchioJoint, HppVectorConfiguration
 from nav_msgs.msg import Path
 from pinocchio.visualize import BaseVisualizer
 from pyhpp import tools

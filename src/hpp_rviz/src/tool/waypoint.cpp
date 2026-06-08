@@ -1,5 +1,9 @@
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/tool/waypoint.cpp
 #include <rcutils/logging_macros.h>
 
+=======
+#include "../../include/hpp/tool/waypoint.hpp"
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/tool/waypoint.cpp
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -26,6 +30,7 @@ void Waypoint::onInitialize() {
 
   // Setup menu handler
 
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/tool/waypoint.cpp
   edit_menu_handle_ = menu_handler_.insert(
       "Edit Position",
       std::bind(&Waypoint::processFeedback, this, std::placeholders::_1));
@@ -43,11 +48,21 @@ void Waypoint::onInitialize() {
           "/hpp_waypoint_server/waypoint_visibility", 10,
           std::bind(&Waypoint::onWaypointVisibilityReceived, this,
                     std::placeholders::_1));
+=======
+    // Subscribe to waypoint topic for precise placement
+    waypoint_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
+        "/hpp_waypoint_server/waypoint", 10,
+        std::bind(&Waypoint::onWaypointReceived, this, std::placeholders::_1));
+    
+    waypoint_visibility_sub_ = node->create_subscription<hpp_gepetto_viewer::msg::HppWaypoint>(
+        "/hpp_waypoint_server/waypoint_visibility", 10, std::bind(&Waypoint::onWaypointVisibilityReceived, this, std::placeholders::_1));
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/tool/waypoint.cpp
 }
 
 void Waypoint::activate() {}
 void Waypoint::deactivate() {}
 
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/tool/waypoint.cpp
 void Waypoint::onWaypointVisibilityReceived(
     const hpp_msgs::msg::HppWaypoint::SharedPtr msg) {
   std::string name = msg->name;
@@ -55,6 +70,14 @@ void Waypoint::onWaypointVisibilityReceived(
   QMetaObject::invokeMethod(
       this,
       [this, name, enable]() {
+=======
+
+void Waypoint::onWaypointVisibilityReceived(const hpp_gepetto_viewer::msg::HppWaypoint::SharedPtr msg)
+{
+    std::string name = msg->name;
+    bool enable = msg->enable;
+    QMetaObject::invokeMethod(this, [this, name, enable]() {
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/tool/waypoint.cpp
         auto it = interactive_waypoints_.find(name);
         if (it == interactive_waypoints_.end()) {
           RCUTILS_LOG_WARN("Waypoint '%s' not found", name.c_str());

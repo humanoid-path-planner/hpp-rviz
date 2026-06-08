@@ -1,4 +1,4 @@
-#include <hpp/panel/trajectory_slider.hpp>
+#include "../../include/hpp/panel/trajectory_slider.hpp"
 
 namespace hpp {
 namespace panel {

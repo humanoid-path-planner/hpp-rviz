@@ -1,6 +1,6 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
-#include <hpp/panel/trajectory_slider.hpp>
+#include "../../include/hpp/panel/trajectory_slider.hpp"
 #include <std_msgs/msg/float64.hpp>
 
 namespace hpp {
@@ -97,7 +97,7 @@ void TrajectorySlider::onPlay() {}
 void TrajectorySlider::onPause() {}
 
 void TrajectorySlider::onComboChanged(const QString& text) {
-  hpp_msgs::msg::PathInfo msg;
+  hpp_gepetto_viewer::msg::PathInfo msg;
   msg.target_frame = text.toStdString();
   target_frame_pub_->publish(msg);
 }

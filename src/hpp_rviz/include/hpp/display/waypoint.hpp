@@ -15,6 +15,13 @@
 #include <visualization_msgs/msg/interactive_marker_init.hpp>
 #include <visualization_msgs/msg/interactive_marker_update.hpp>
 
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/include/hpp/display/waypoint.hpp
+=======
+#include "WaypointProperty.hpp"
+#include <hpp_gepetto_viewer/msg/hpp_waypoint.hpp>
+
+
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/display/waypoint.hpp
 namespace hpp {
 
 namespace displays {
@@ -38,9 +45,15 @@ class WaypointDisplay
 
   rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
 
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/include/hpp/display/waypoint.hpp
   rclcpp::Subscription<
       visualization_msgs::msg::InteractiveMarkerUpdate>::SharedPtr update_sub_;
   rclcpp::Publisher<hpp_msgs::msg::HppWaypoint>::SharedPtr
+=======
+  rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerUpdate>::SharedPtr
+      update_sub_;
+  rclcpp::Publisher<hpp_gepetto_viewer::msg::HppWaypoint>::SharedPtr
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/display/waypoint.hpp
       waypoint_visiblilty_pub_;
 };
 

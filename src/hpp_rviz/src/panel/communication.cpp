@@ -1,4 +1,4 @@
-#include <hpp/panel/trajectory_slider.hpp>
+#include "../../include/hpp/panel/trajectory_slider.hpp"
 
 namespace hpp {
 namespace panel {
@@ -8,31 +8,31 @@ void TrajectorySlider::onInitialize() {
 
   rclcpp::Node::SharedPtr node = node_ptr_.lock()->get_raw_node();
 
-  time_pub_ = node->create_publisher<hpp_msgs::msg::PathInfo>(
+  time_pub_ = node->create_publisher<hpp_gepetto_viewer::msg::PathInfo>(
       "/hpp/trajectory_time", 10);
 
-  length_sub_ = node->create_subscription<hpp_msgs::msg::PathInfo>(
+  length_sub_ = node->create_subscription<hpp_gepetto_viewer::msg::PathInfo>(
       "/hpp/pathInfo", 10,
-      [this](const hpp_msgs::msg::PathInfo::SharedPtr msg) {
+      [this](const hpp_gepetto_viewer::msg::PathInfo::SharedPtr msg) {
         onPathInfoReceive(msg);
       });
 
   scene_obj_sub_ =
-      node->create_subscription<hpp_msgs::msg::HppVectorConfiguration>(
+      node->create_subscription<hpp_gepetto_viewer::msg::HppVectorConfiguration>(
           "/hpp/scene_objects", 10,
-          [this](const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg) {
+          [this](const hpp_gepetto_viewer::msg::HppVectorConfiguration::SharedPtr msg) {
             onSceneObjReceive(msg);
           });
 
   target_frame_pub_ =
-      node->create_publisher<hpp_msgs::msg::PathInfo>("/hpp/target_frame", 10);
+      node->create_publisher<hpp_gepetto_viewer::msg::PathInfo>("/hpp/target_frame", 10);
 
-  joint_value_pub_ = node->create_publisher<hpp_msgs::msg::PinocchioJoint>(
+  joint_value_pub_ = node->create_publisher<hpp_gepetto_viewer::msg::PinocchioJoint>(
       "/hpp/pinocchio_joints", 10);
 }
 
 void TrajectorySlider::onJointValueChanged(std::string name, double value) {
-  hpp_msgs::msg::PinocchioJoint msg;
+  hpp_gepetto_viewer::msg::PinocchioJoint msg;
   msg.name = name;
   msg.values.push_back(static_cast<float>(value));
   msg.type = "JOINT";
@@ -96,7 +96,7 @@ void TrajectorySlider::onFreeFlyerValueChanged(std::string name, double value,
     }
   }
 
-  hpp_msgs::msg::PinocchioJoint msg;
+  hpp_gepetto_viewer::msg::PinocchioJoint msg;
   msg.name = name;
   msg.values = {static_cast<float>(freeflyerValues_[name][0]),
                 static_cast<float>(freeflyerValues_[name][1]),
@@ -112,7 +112,7 @@ void TrajectorySlider::onFreeFlyerValueChanged(std::string name, double value,
 }
 
 void TrajectorySlider::onPathInfoReceive(
-    const hpp_msgs::msg::PathInfo::SharedPtr msg) {
+    const hpp_gepetto_viewer::msg::PathInfo::SharedPtr msg) {
   path_length_ = msg->path_length;
   current_time_ = 0.0;
   is_playing_ = false;
@@ -141,7 +141,7 @@ void TrajectorySlider::onPathInfoReceive(
 }
 
 void TrajectorySlider::publishTime() {
-  hpp_msgs::msg::PathInfo msg;
+  hpp_gepetto_viewer::msg::PathInfo msg;
   msg.current_time = current_time_;
   time_pub_->publish(msg);
 }
@@ -170,7 +170,12 @@ QTreeWidgetItem* TrajectorySlider::getOrCreateNamespaceItem(
 }
 
 void TrajectorySlider::onSceneObjReceive(
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/panel/communication.cpp
     const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg) {
+=======
+    const hpp_gepetto_viewer::msg::HppVectorConfiguration::SharedPtr msg) {
+  
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/panel/communication.cpp
   std::string vectorConfigurationInfo = "[";
 
   for (float val : msg->hpp_vector) {

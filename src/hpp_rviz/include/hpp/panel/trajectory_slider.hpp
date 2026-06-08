@@ -13,10 +13,17 @@
 #include <QTimer>
 #include <QTreeWidget>
 #include <QWidget>
+<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/include/hpp/panel/trajectory_slider.hpp
 #include <hpp/doubleSlider.hpp>
 #include <hpp_msgs/msg/hpp_vector_configuration.hpp>
 #include <hpp_msgs/msg/path_info.hpp>
 #include <hpp_msgs/msg/pinocchio_joint.hpp>
+=======
+#include "../doubleSlider.hpp"
+#include <hpp_gepetto_viewer/msg/path_info.hpp>
+#include <hpp_gepetto_viewer/msg/pinocchio_joint.hpp>
+#include <hpp_gepetto_viewer/msg/hpp_vector_configuration.hpp>
+>>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/panel/trajectory_slider.hpp
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/panel.hpp>
@@ -48,14 +55,14 @@ class TrajectorySlider : public rviz_common::Panel {
  private:
   void onPlay();
   void onPause();
-  void onPathInfoReceive(const hpp_msgs::msg::PathInfo::SharedPtr msg);
+  void onPathInfoReceive(const hpp_gepetto_viewer::msg::PathInfo::SharedPtr msg);
   void publishTime();
   void updateTimeDisplay();
   void initializeUi();
   void onJointValueChanged(std::string name, double value);
   void onFreeFlyerValueChanged(std::string name, double value, int index);
   void onSceneObjReceive(
-      const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg);
+      const hpp_gepetto_viewer::msg::HppVectorConfiguration::SharedPtr msg);
 
   std::map<std::string, QTreeWidgetItem*> objPosInSceneTree_;
   std::map<std::string, std::array<double, 7>> freeflyerValues_;
@@ -107,12 +114,12 @@ class TrajectorySlider : public rviz_common::Panel {
   bool is_playing_{false};
   // ROS
   rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
-  rclcpp::Publisher<hpp_msgs::msg::PathInfo>::SharedPtr time_pub_;
-  rclcpp::Subscription<hpp_msgs::msg::PathInfo>::SharedPtr length_sub_;
-  rclcpp::Subscription<hpp_msgs::msg::HppVectorConfiguration>::SharedPtr
+  rclcpp::Publisher<hpp_gepetto_viewer::msg::PathInfo>::SharedPtr time_pub_;
+  rclcpp::Subscription<hpp_gepetto_viewer::msg::PathInfo>::SharedPtr length_sub_;
+  rclcpp::Subscription<hpp_gepetto_viewer::msg::HppVectorConfiguration>::SharedPtr
       scene_obj_sub_;
-  rclcpp::Publisher<hpp_msgs::msg::PathInfo>::SharedPtr target_frame_pub_;
-  rclcpp::Publisher<hpp_msgs::msg::PinocchioJoint>::SharedPtr joint_value_pub_;
+  rclcpp::Publisher<hpp_gepetto_viewer::msg::PathInfo>::SharedPtr target_frame_pub_;
+  rclcpp::Publisher<hpp_gepetto_viewer::msg::PinocchioJoint>::SharedPtr joint_value_pub_;
 };
 
 }  // namespace panel
