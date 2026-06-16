@@ -15,12 +15,16 @@
 #include <rviz_common/tool.hpp>
 #include <visualization_msgs/msg/interactive_marker.hpp>
 
-    =======
+    == == ==
+    =
 #include <hpp_gepetto_viewer/msg/hpp_waypoint.hpp>
-    >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/tool/waypoint.hpp
+        >>>>>>>
+        23d1530(change compilation in order to have only one package.xml)
+    : src / hpp_rviz / include / hpp / tool /
+      waypoint.hpp
 #include "interactiveWaypoint.hpp"
 
-    namespace hpp {
+      namespace hpp {
   namespace tool {
 
   class Waypoint : public rviz_common::Tool {

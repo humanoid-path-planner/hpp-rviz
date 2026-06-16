@@ -21,7 +21,8 @@
 
 #include "WaypointProperty.hpp"
 
-    >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/display/waypoint.hpp namespace hpp {
+    >>>>>>> 23d1530(change compilation in order to have only one package.xml)
+    : src / hpp_rviz / include / hpp / display / waypoint.hpp namespace hpp {
 
   namespace displays {
   class WaypointDisplay

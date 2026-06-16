@@ -18,20 +18,24 @@
 #include <hpp_msgs/msg/hpp_vector_configuration.hpp>
 #include <hpp_msgs/msg/path_info.hpp>
 #include <hpp_msgs/msg/pinocchio_joint.hpp>
-    =======
+    == == ==
+    =
 #include <hpp_gepetto_viewer/msg/hpp_vector_configuration.hpp>
 #include <hpp_gepetto_viewer/msg/path_info.hpp>
 #include <hpp_gepetto_viewer/msg/pinocchio_joint.hpp>
 
 #include "../doubleSlider.hpp"
-    >>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/include/hpp/panel/trajectory_slider.hpp
+        >>>>>>>
+        23d1530(change compilation in order to have only one package.xml)
+    : src / hpp_rviz / include / hpp / panel /
+      trajectory_slider.hpp
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/panel.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 
-    namespace hpp {
+      namespace hpp {
   namespace panel {
   enum ObjType { FreeFlyer, Others };
 
