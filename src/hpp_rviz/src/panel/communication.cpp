@@ -170,12 +170,7 @@ QTreeWidgetItem* TrajectorySlider::getOrCreateNamespaceItem(
 }
 
 void TrajectorySlider::onSceneObjReceive(
-<<<<<<< HEAD:src/hpp_rviz_pkg/hpp_ros_visualization/src/panel/communication.cpp
-    const hpp_msgs::msg::HppVectorConfiguration::SharedPtr msg) {
-=======
     const hpp_gepetto_viewer::msg::HppVectorConfiguration::SharedPtr msg) {
-
->>>>>>> 23d1530 (change compilation in order to have only one package.xml):src/hpp_rviz/src/panel/communication.cpp
   std::string vectorConfigurationInfo = "[";
 
   for (float val : msg->hpp_vector) {
