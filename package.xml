@@ -1,7 +1,7 @@
 <package format="3">
-  <name>hpp_gepetto_viewer</name>
+  <name>hpp_rviz</name>
   <version>8.0.0</version>
-  <description>Display of hpp robots and obstacles in gepetto-viewer </description>
+  <description>rviz plugins</description>
 
   <maintainer email="guilhem.saurel@laas.fr">Guilhem Saurel</maintainer>
 
@@ -9,9 +9,9 @@
   <author>Florent Lamiraux et al.</author>
   <license>BSD-2</license>
 
-  <url type="website">https://github.com/humanoid-path-planner/hpp-gepetto-viewer</url>
-  <url type="repository">https://github.com/humanoid-path-planner/hpp-gepetto-viewer</url>
-  <url type="bugtracker">https://github.com/humanoid-path-planner/hpp-gepetto-viewer/issues</url>
+  <url type="website">https://github.com/humanoid-path-planner/hpp_rviz</url>
+  <url type="repository">https://github.com/humanoid-path-planner/hpp_rviz</url>
+  <url type="bugtracker">https://github.com/humanoid-path-planner/hpp_rviz/issues</url>
 
   <buildtool_depend condition="$ROS_VERSION == 1">catkin</buildtool_depend>
   <buildtool_depend condition="$ROS_VERSION == 2">ament_cmake</buildtool_depend>
@@ -31,7 +31,6 @@
   <depend condition="$ROS_VERSION == 2">pluginlib</depend>
   <depend condition="$ROS_VERSION == 2">ament_cmake_ros</depend>
 
-  <exec_depend>hpp-corbaserver</exec_depend>
   <exec_depend>gepetto-viewer</exec_depend>
 
   <depend condition="$ROS_PYTHON_VERSION == 2">python</depend>
