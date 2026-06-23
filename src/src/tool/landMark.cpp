@@ -1,4 +1,4 @@
-#include "../../include/hpp/tool/waypoint.hpp"
+#include "../../include/hpp/tool/landMark.hpp"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -11,45 +11,45 @@
 namespace hpp {
 namespace tool {
 
-Waypoint::Waypoint() = default;
+LandMark::LandMark() = default;
 
-Waypoint::~Waypoint() = default;
+LandMark::~LandMark() = default;
 
-void Waypoint::onInitialize() {
+void LandMark::onInitialize() {
   rviz_common::Tool::onInitialize();
   node_ptr_ = context_->getRosNodeAbstraction().lock();
   rclcpp::Node::SharedPtr node = node_ptr_.lock()->get_raw_node();
 
   server_ = std::make_shared<interactive_markers::InteractiveMarkerServer>(
-      "hpp_waypoint_server", node);
+      "hpp_LandMark_server", node);
 
   // Setup menu handler
 
-  // Subscribe to waypoint topic for precise placement
-  waypoint_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
-      "/hpp_waypoint_server/waypoint", 10,
-      std::bind(&Waypoint::onWaypointReceived, this, std::placeholders::_1));
+  // Subscribe to LandMark topic for precise placement
+  LandMark_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
+      "/hpp_LandMark_server/LandMark", 10,
+      std::bind(&LandMark::onLandMarkReceived, this, std::placeholders::_1));
 
-  waypoint_visibility_sub_ =
-      node->create_subscription<hpp_rviz::msg::HppWaypoint>(
-          "/hpp_waypoint_server/waypoint_visibility", 10,
-          std::bind(&Waypoint::onWaypointVisibilityReceived, this,
+  LandMark_visibility_sub_ =
+      node->create_subscription<hpp_rviz::msg::HppLandMark>(
+          "/hpp_LandMark_server/LandMark_visibility", 10,
+          std::bind(&LandMark::onLandMarkVisibilityReceived, this,
                     std::placeholders::_1));
 }
 
-void Waypoint::activate() {}
-void Waypoint::deactivate() {}
+void LandMark::activate() {}
+void LandMark::deactivate() {}
 
-void Waypoint::onWaypointVisibilityReceived(
-    const hpp_rviz::msg::HppWaypoint::SharedPtr msg) {
+void LandMark::onLandMarkVisibilityReceived(
+    const hpp_rviz::msg::HppLandMark::SharedPtr msg) {
   std::string name = msg->name;
   bool enable = msg->enable;
   QMetaObject::invokeMethod(
       this,
       [this, name, enable]() {
-        auto it = interactive_waypoints_.find(name);
-        if (it == interactive_waypoints_.end()) {
-          RCUTILS_LOG_WARN("Waypoint '%s' not found", name.c_str());
+        auto it = interactive_LandMarks_.find(name);
+        if (it == interactive_LandMarks_.end()) {
+          RCUTILS_LOG_WARN("LandMark '%s' not found", name.c_str());
           return;
         }
 
@@ -64,7 +64,7 @@ void Waypoint::onWaypointVisibilityReceived(
 
         server_->insert(
             marker_to_insert,
-            std::bind(&Waypoint::processFeedback, this, std::placeholders::_1));
+            std::bind(&LandMark::processFeedback, this, std::placeholders::_1));
 
         if (enable) {
           menu_handler_.apply(*server_, marker_to_insert.name);
@@ -74,7 +74,7 @@ void Waypoint::onWaypointVisibilityReceived(
       Qt::QueuedConnection);
 }
 
-int Waypoint::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
+int LandMark::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
   if (event.leftDown()) {
     Ogre::Vector3 position_3d;
     if (context_->getViewPicker()->get3DPoint(event.panel, event.x, event.y,
@@ -85,51 +85,51 @@ int Waypoint::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
       pos_msg.pose.position.y = position_3d.y;
       pos_msg.pose.position.z = position_3d.z;
       pos_msg.pose.orientation.w = 1.0;
-      createInteractiveWaypoint(pos_msg);
+      createInteractiveLandMark(pos_msg);
     }
   }
 
   return 0;
 }
 
-void Waypoint::createInteractiveWaypoint(
+void LandMark::createInteractiveLandMark(
     const geometry_msgs::msg::PoseStamped& pos) {
   Ogre::Vector3 position(pos.pose.position.x, pos.pose.position.y,
                          pos.pose.position.z);
   Ogre::Quaternion orientation(pos.pose.orientation.w, pos.pose.orientation.x,
                                pos.pose.orientation.y, pos.pose.orientation.z);
 
-  const int waypoint_id = waypoint_count_++;
+  const int LandMark_id = LandMark_count_++;
 
-  InteractiveWaypoint int_marker(position, orientation,
-                                 "waypoint_" + std::to_string(waypoint_id),
-                                 "Waypoint_" + std::to_string(waypoint_id));
+  InteractiveLandMark int_marker(position, orientation,
+                                 "LandMark_" + std::to_string(LandMark_id),
+                                 "LandMark_" + std::to_string(LandMark_id));
 
-  server_->insert(int_marker, std::bind(&Waypoint::processFeedback, this,
+  server_->insert(int_marker, std::bind(&LandMark::processFeedback, this,
                                         std::placeholders::_1));
 
   menu_handler_.apply(*server_, int_marker.name);
-  interactive_waypoints_[int_marker.name] =
-      std::make_unique<InteractiveWaypoint>(int_marker);
+  interactive_LandMarks_[int_marker.name] =
+      std::make_unique<InteractiveLandMark>(int_marker);
   server_->applyChanges();
 }
 
-void Waypoint::processFeedback(
+void LandMark::processFeedback(
     const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr&
         feedback) {
   if (feedback->event_type ==
       visualization_msgs::msg::InteractiveMarkerFeedback::POSE_UPDATE) {
     server_->setPose(feedback->marker_name, feedback->pose);
     server_->applyChanges();
-    auto it = interactive_waypoints_.find(feedback->marker_name);
-    if (it != interactive_waypoints_.end()) {
+    auto it = interactive_LandMarks_.find(feedback->marker_name);
+    if (it != interactive_LandMarks_.end()) {
       it->second->pose = feedback->pose;
     }
   } else if (feedback->event_type ==
              visualization_msgs::msg::InteractiveMarkerFeedback::MENU_SELECT) {
     if (feedback->menu_entry_id == edit_menu_handle_) {
       QDialog dialog;
-      dialog.setWindowTitle("Edit waypoint position");
+      dialog.setWindowTitle("Edit LandMark position");
 
       auto* layout = new QVBoxLayout(&dialog);
       auto* form = new QFormLayout();
@@ -191,11 +191,11 @@ void Waypoint::processFeedback(
   }
 }
 
-void Waypoint::onWaypointReceived(
+void LandMark::onLandMarkReceived(
     const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
-  createInteractiveWaypoint(*msg);
+  createInteractiveLandMark(*msg);
 }
 }  // namespace tool
 }  // namespace hpp
 
-PLUGINLIB_EXPORT_CLASS(hpp::tool::Waypoint, rviz_common::Tool)
+PLUGINLIB_EXPORT_CLASS(hpp::tool::LandMark, rviz_common::Tool)

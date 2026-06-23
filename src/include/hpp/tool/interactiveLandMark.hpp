@@ -14,12 +14,12 @@
 
 namespace hpp {
 
-class InteractiveWaypoint : public visualization_msgs::msg::InteractiveMarker {
+class InteractiveLandMark : public visualization_msgs::msg::InteractiveMarker {
  public:
-  InteractiveWaypoint() = default;
-  InteractiveWaypoint(const Ogre::Vector3& pos, const Ogre::Quaternion& orient,
-                      const std::string& name = "waypoint",
-                      const std::string& description = "hpp waypoint") {
+  InteractiveLandMark() = default;
+  InteractiveLandMark(const Ogre::Vector3& pos, const Ogre::Quaternion& orient,
+                      const std::string& name = "LandMark",
+                      const std::string& description = "hpp LandMark") {
     this->header.frame_id = "world";
     this->scale = 0.2;
     this->name = name;

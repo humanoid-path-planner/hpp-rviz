@@ -17,18 +17,18 @@ void TrajectorySlider::onInitialize() {
         onPathInfoReceive(msg);
       });
 
-  scene_obj_sub_ = node->create_subscription<
-      hpp_rviz::msg::HppVectorConfiguration>(
-      "/hpp/scene_objects", 10,
-      [this](const hpp_rviz::msg::HppVectorConfiguration::SharedPtr
-                 msg) { onSceneObjReceive(msg); });
+  scene_obj_sub_ =
+      node->create_subscription<hpp_rviz::msg::HppVectorConfiguration>(
+          "/hpp/scene_objects", 10,
+          [this](const hpp_rviz::msg::HppVectorConfiguration::SharedPtr msg) {
+            onSceneObjReceive(msg);
+          });
 
-  target_frame_pub_ = node->create_publisher<hpp_rviz::msg::PathInfo>(
-      "/hpp/target_frame", 10);
+  target_frame_pub_ =
+      node->create_publisher<hpp_rviz::msg::PathInfo>("/hpp/target_frame", 10);
 
-  joint_value_pub_ =
-      node->create_publisher<hpp_rviz::msg::PinocchioJoint>(
-          "/hpp/pinocchio_joints", 10);
+  joint_value_pub_ = node->create_publisher<hpp_rviz::msg::PinocchioJoint>(
+      "/hpp/pinocchio_joints", 10);
 }
 
 void TrajectorySlider::onJointValueChanged(std::string name, double value) {

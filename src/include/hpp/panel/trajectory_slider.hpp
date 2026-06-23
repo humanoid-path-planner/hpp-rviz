@@ -49,8 +49,7 @@ class TrajectorySlider : public rviz_common::Panel {
  private:
   void onPlay();
   void onPause();
-  void onPathInfoReceive(
-      const hpp_rviz::msg::PathInfo::SharedPtr msg);
+  void onPathInfoReceive(const hpp_rviz::msg::PathInfo::SharedPtr msg);
   void publishTime();
   void updateTimeDisplay();
   void initializeUi();
@@ -110,14 +109,11 @@ class TrajectorySlider : public rviz_common::Panel {
   // ROS
   rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
   rclcpp::Publisher<hpp_rviz::msg::PathInfo>::SharedPtr time_pub_;
-  rclcpp::Subscription<hpp_rviz::msg::PathInfo>::SharedPtr
-      length_sub_;
-  rclcpp::Subscription<hpp_rviz::msg::HppVectorConfiguration>::
-      SharedPtr scene_obj_sub_;
-  rclcpp::Publisher<hpp_rviz::msg::PathInfo>::SharedPtr
-      target_frame_pub_;
-  rclcpp::Publisher<hpp_rviz::msg::PinocchioJoint>::SharedPtr
-      joint_value_pub_;
+  rclcpp::Subscription<hpp_rviz::msg::PathInfo>::SharedPtr length_sub_;
+  rclcpp::Subscription<hpp_rviz::msg::HppVectorConfiguration>::SharedPtr
+      scene_obj_sub_;
+  rclcpp::Publisher<hpp_rviz::msg::PathInfo>::SharedPtr target_frame_pub_;
+  rclcpp::Publisher<hpp_rviz::msg::PinocchioJoint>::SharedPtr joint_value_pub_;
 };
 
 }  // namespace panel

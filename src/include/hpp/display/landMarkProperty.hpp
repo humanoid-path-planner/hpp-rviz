@@ -11,10 +11,10 @@
 
 namespace hpp {
 
-class WaypointProperty : public QObject {
+class LandMarkProperty : public QObject {
   Q_OBJECT
  public:
-  WaypointProperty(
+  LandMarkProperty(
       const QString& name, const QString& description,
       const std::string& parent_frame = "world",
       const Ogre::Vector3& position = Ogre::Vector3::ZERO,
@@ -26,18 +26,18 @@ class WaypointProperty : public QObject {
 
     parent_property_ = new rviz_common::properties::StringProperty(
         "Parent", QString::fromStdString(parent_frame),
-        "Parent frame of this waypoint. (Not editable)", group_property_);
+        "Parent frame of this LandMark. (Not editable)", group_property_);
     parent_property_->setReadOnly(true);
 
     position_property_ = new rviz_common::properties::VectorProperty(
         "Position", position,
-        "Position of this waypoint in its parent frame. (Not editable)",
+        "Position of this LandMark in its parent frame. (Not editable)",
         group_property_);
     position_property_->setReadOnly(true);
 
     orientation_property_ = new rviz_common::properties::QuaternionProperty(
         "Orientation", orientation,
-        "Orientation of this waypoint in its parent frame. (Not editable)",
+        "Orientation of this LandMark in its parent frame. (Not editable)",
         group_property_);
     orientation_property_->setReadOnly(true);
 
@@ -46,7 +46,7 @@ class WaypointProperty : public QObject {
               emit enabledChanged(name_.c_str(), group_property_->getBool());
             });
   };
-  ~WaypointProperty() = default;
+  ~LandMarkProperty() = default;
 
   void setPosition(const Ogre::Vector3& position) {
     position_property_->setVector(position);

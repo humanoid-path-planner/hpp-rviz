@@ -1,7 +1,6 @@
 #ifndef HPP_PLUGINS__TRAJECTORY__POINT_DISPLAY_HPP_
 #define HPP_PLUGINS__TRAJECTORY__POINT_DISPLAY_HPP_
 
-#include <memory>
 #include <rviz_common/display.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/panel_dock_widget.hpp>

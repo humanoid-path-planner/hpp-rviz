@@ -1,4 +1,4 @@
-#include "../../include/hpp/display/waypoint.hpp"
+#include "../../include/hpp/display/landMark.hpp"
 
 #include <QMetaObject>
 #include <QStringList>
@@ -10,13 +10,13 @@
 namespace hpp {
 namespace displays {
 
-void WaypointDisplay::onInitialize() {
+void LandMarkDisplay::onInitialize() {
   rviz_default_plugins::displays::InteractiveMarkerDisplay::onInitialize();
 
   group_property_ = new rviz_common::properties::Property(
-      "Waypoints", QVariant(), "Waypoints description", this);
+      "LandMarks", QVariant(), "LandMarks description", this);
 
-  const std::string server_topic = "/hpp_waypoint_server";
+  const std::string server_topic = "/hpp_LandMark_server";
   setTopic(QString::fromStdString(server_topic), "");
 
   auto* show_axes = findProperty("Show Axes");
@@ -35,7 +35,7 @@ void WaypointDisplay::onInitialize() {
   node_ptr_ = context_->getRosNodeAbstraction();
   auto node_lock = node_ptr_.lock();
   if (!node_lock) {
-    setStatus(rviz_common::properties::StatusProperty::Error, "Waypoint",
+    setStatus(rviz_common::properties::StatusProperty::Error, "LandMark",
               "Unable to access ROS node.");
     return;
   }
@@ -45,45 +45,43 @@ void WaypointDisplay::onInitialize() {
   update_sub_ = node->create_subscription<
       visualization_msgs::msg::InteractiveMarkerUpdate>(
       server_topic + "/update", update_qos,
-      std::bind(&WaypointDisplay::onUpdateMessage, this,
+      std::bind(&LandMarkDisplay::onUpdateMessage, this,
                 std::placeholders::_1));
 
-  waypoint_visiblilty_pub_ =
-      node->create_publisher<hpp_rviz::msg::HppWaypoint>(
-          server_topic + "/waypoint_visibility", 10);
+  LandMark_visiblilty_pub_ = node->create_publisher<hpp_rviz::msg::HppLandMark>(
+      server_topic + "/LandMark_visibility", 10);
 
-  waypoint_visiblilty_pub_ =
-      node->create_publisher<hpp_rviz::msg::HppWaypoint>(
-          server_topic + "/waypoint_visibility", 10);
+  LandMark_visiblilty_pub_ = node->create_publisher<hpp_rviz::msg::HppLandMark>(
+      server_topic + "/LandMark_visibility", 10);
 
-  setStatus(rviz_common::properties::StatusProperty::Ok, "Waypoint",
+  setStatus(rviz_common::properties::StatusProperty::Ok, "LandMark",
             "Listening for interactive marker updates.");
 }
 
-void WaypointDisplay::onWaypointEnabledChanged(const std::string& name,
+void LandMarkDisplay::onLandMarkEnabledChanged(const std::string& name,
                                                bool enabled) {
-  RCUTILS_LOG_INFO("Waypoint '%s' enabled changed to %s", name.c_str(),
+  RCUTILS_LOG_INFO("LandMark '%s' enabled changed to %s", name.c_str(),
                    enabled ? "true" : "false");
-  auto it = waypoint_properties_.find(name);
-  if (it == waypoint_properties_.end()) return;
-  hpp_rviz::msg::HppWaypoint msg;
+  auto it = LandMark_properties_.find(name);
+  if (it == LandMark_properties_.end()) return;
+  hpp_rviz::msg::HppLandMark msg;
   msg.name = name;
   msg.enable = enabled;
-  waypoint_visiblilty_pub_->publish(msg);
+  LandMark_visiblilty_pub_->publish(msg);
 }
 
-void WaypointDisplay::onUpdateMessage(
+void LandMarkDisplay::onUpdateMessage(
     const visualization_msgs::msg::InteractiveMarkerUpdate::SharedPtr msg) {
   QMetaObject::invokeMethod(
       this,
       [this, msg]() {
         for (const auto& marker : msg->markers) {
-          if (waypoint_properties_.count(marker.name)) {
+          if (LandMark_properties_.count(marker.name)) {
             continue;
           }
-          auto wp = std::make_unique<WaypointProperty>(
+          auto wp = std::make_unique<LandMarkProperty>(
               QString::fromStdString(marker.name),
-              QString::fromStdString("Waypoint " + marker.name),
+              QString::fromStdString("LandMark " + marker.name),
               marker.header.frame_id,
               Ogre::Vector3((float)marker.pose.position.x,
                             (float)marker.pose.position.y,
@@ -94,23 +92,23 @@ void WaypointDisplay::onUpdateMessage(
                                (float)marker.pose.orientation.z),
               group_property_);
 
-          connect(wp.get(), &WaypointProperty::enabledChanged, this,
-                  &WaypointDisplay::onWaypointEnabledChanged);
+          connect(wp.get(), &LandMarkProperty::enabledChanged, this,
+                  &LandMarkDisplay::onLandMarkEnabledChanged);
 
-          waypoint_properties_.emplace(marker.name, std::move(wp));
+          LandMark_properties_.emplace(marker.name, std::move(wp));
         }
 
         for (const auto& erased_name : msg->erases) {
-          auto it = waypoint_properties_.find(erased_name);
-          if (it != waypoint_properties_.end()) {
+          auto it = LandMark_properties_.find(erased_name);
+          if (it != LandMark_properties_.end()) {
             it->second->removeFromParent();
-            waypoint_properties_.erase(it);
+            LandMark_properties_.erase(it);
           }
         }
 
         for (const auto& marker : msg->poses) {
-          auto it = waypoint_properties_.find(marker.name);
-          if (it != waypoint_properties_.end()) {
+          auto it = LandMark_properties_.find(marker.name);
+          if (it != LandMark_properties_.end()) {
             it->second->setPosition(Ogre::Vector3(
                 (float)marker.pose.position.x, (float)marker.pose.position.y,
                 (float)marker.pose.position.z));
@@ -129,4 +127,4 @@ void WaypointDisplay::onUpdateMessage(
 }  // namespace hpp
 
 #include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(hpp::displays::WaypointDisplay, rviz_common::Display)
+PLUGINLIB_EXPORT_CLASS(hpp::displays::LandMarkDisplay, rviz_common::Display)
