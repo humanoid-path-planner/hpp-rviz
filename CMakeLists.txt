@@ -21,11 +21,7 @@ project(hpp_rviz VERSION 8.0.0 LANGUAGES C CXX)
 
 set(PROJECT_USE_CMAKE_EXPORT TRUE)
 
-
 find_package(ament_cmake REQUIRED)
-
-
-
 
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -35,7 +31,7 @@ rosidl_generate_interfaces(${HPP_RVIZ_MSG_TARGET}
     src/msg/PathInfo.msg
     src/msg/PinocchioJoint.msg
     src/msg/HppVectorConfiguration.msg
-    src/msg/HppWaypoint.msg
+    src/msg/HppLandMark.msg
     DEPENDENCIES std_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)
@@ -58,10 +54,10 @@ set(MOC_FILE_TMP
     src/include/hpp/display/trajectory.hpp
     src/include/hpp/panel/trajectory_slider.hpp
     src/include/hpp/doubleSlider.hpp
-    src/include/hpp/tool/waypoint.hpp
-    src/include/hpp/tool/interactiveWaypoint.hpp
-    src/include/hpp/display/waypoint.hpp
-    src/include/hpp/display/WaypointProperty.hpp
+    src/include/hpp/tool/landMark.hpp
+    src/include/hpp/tool/interactiveLandMark.hpp
+    src/include/hpp/display/landMark.hpp
+    src/include/hpp/display/landMarkProperty.hpp
 )
 
 if(QT_VERSION_MAJOR EQUAL 6)
@@ -76,8 +72,8 @@ add_library(
     src/src/panel/trajectory_slider.cpp
     src/src/panel/ui.cpp
     src/src/panel/communication.cpp
-    src/src/tool/waypoint.cpp
-    src/src/display/waypoint.cpp
+    src/src/tool/landMark.cpp
+    src/src/display/landMark.cpp
     ${MOC_FILES}
 )
 
@@ -105,12 +101,11 @@ install(
 install(DIRECTORY src/include/ DESTINATION include)
 install(FILES rviz_common_plugins.xml DESTINATION share/${PROJECT_NAME})
 install(
-    FILES src/icons/Trajectory.png src/icons/Waypoint.png
+    FILES src/icons/Trajectory.png src/icons/LandMark.png
     DESTINATION share/${PROJECT_NAME}/icons/classes
 )
 ament_export_include_directories(include)
 ament_export_targets(export_${HPP_RVIZ_PLUGIN_TARGET})
 pluginlib_export_plugin_description_file(rviz_common rviz_common_plugins.xml)
-
 
 ament_package()

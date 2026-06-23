@@ -1,15 +1,9 @@
 [project]
 dependencies = [
-  "numpy",
-  "pin",
-  "pycollada",
-  "trimesh",
-  "viser",
-  "websockets"
 ]
-description = "Display of hpp robots and obstacles in gepetto-viewer"
+description = "Rviz plugins for hpp visualization"
 license = "BSD-2-Clause"
-name = "hpp-gepetto-viewer"
+name = "hpp-rviz2"
 version = "8.0.0"
 
 [tool.ruff]
