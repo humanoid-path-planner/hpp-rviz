@@ -1,5 +1,4 @@
 #include "../../include/hpp/tool/landmark.hpp"
-#include "hpp_rviz/msg/landmark.hpp"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -9,6 +8,8 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <rviz_common/viewport_mouse_event.hpp>
 #include <string>
+
+#include "hpp_rviz/msg/landmark.hpp"
 
 namespace hpp {
 namespace tool {
@@ -31,11 +32,10 @@ void Landmark::onInitialize() {
       "/hpp_landmark_server/landmark", 10,
       std::bind(&Landmark::onLandmarkReceived, this, std::placeholders::_1));
 
-  Landmark_visibility_sub_ =
-      node->create_subscription<hpp_rviz::msg::Landmark>(
-          "/hpp_landmark_server/landmark_visibility", 10,
-          std::bind(&Landmark::onLandmarkVisibilityReceived, this,
-                    std::placeholders::_1));
+  Landmark_visibility_sub_ = node->create_subscription<hpp_rviz::msg::Landmark>(
+      "/hpp_landmark_server/landmark_visibility", 10,
+      std::bind(&Landmark::onLandmarkVisibilityReceived, this,
+                std::placeholders::_1));
 }
 
 void Landmark::activate() {}
@@ -80,7 +80,7 @@ int Landmark::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
     Ogre::Vector3 position_3d;
     if (context_->getViewPicker()->get3DPoint(event.panel, event.x, event.y,
                                               position_3d)) {
-      Ogre::Quaternion quat(1, 0, 0 ,0);
+      Ogre::Quaternion quat(1, 0, 0, 0);
       createInteractiveLandmark(position_3d, quat, "");
     }
   }
@@ -88,13 +88,11 @@ int Landmark::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
   return 0;
 }
 
-
-
-void Landmark::createInteractiveLandmark(Ogre::Vector3 translation, Ogre::Quaternion orientation, std::string name) {
-
+void Landmark::createInteractiveLandmark(Ogre::Vector3 translation,
+                                         Ogre::Quaternion orientation,
+                                         std::string name) {
   const int Landmark_id = Landmark_count_++;
-  if (name.empty())
-    name = "Landmark_" + std::to_string(Landmark_id);
+  if (name.empty()) name = "Landmark_" + std::to_string(Landmark_id);
 
   InteractiveLandmark int_marker(translation, orientation, name,
                                  "Landmark_" + std::to_string(Landmark_id));
@@ -185,10 +183,10 @@ void Landmark::processFeedback(
   }
 }
 
-void Landmark::onLandmarkReceived(
-    const hpp_rviz::msg::Landmark landmark) {
+void Landmark::onLandmarkReceived(const hpp_rviz::msg::Landmark landmark) {
   Ogre::Vector3 translation(landmark.tx, landmark.ty, landmark.tz);
-  Ogre::Quaternion orientation(landmark.ow, landmark.ox, landmark.oy, landmark.oz);
+  Ogre::Quaternion orientation(landmark.ow, landmark.ox, landmark.oy,
+                               landmark.oz);
   createInteractiveLandmark(translation, orientation, landmark.name);
 }
 }  // namespace tool
