@@ -31,7 +31,7 @@ rosidl_generate_interfaces(${HPP_RVIZ_MSG_TARGET}
     src/msg/PathInfo.msg
     src/msg/PinocchioJoint.msg
     src/msg/HppVectorConfiguration.msg
-    src/msg/HppLandMark.msg
+    src/msg/Landmark.msg
     DEPENDENCIES std_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)
@@ -54,10 +54,10 @@ set(MOC_FILE_TMP
     src/include/hpp/display/trajectory.hpp
     src/include/hpp/panel/trajectory_slider.hpp
     src/include/hpp/doubleSlider.hpp
-    src/include/hpp/tool/landMark.hpp
-    src/include/hpp/tool/interactiveLandMark.hpp
-    src/include/hpp/display/landMark.hpp
-    src/include/hpp/display/landMarkProperty.hpp
+    src/include/hpp/tool/landmark.hpp
+    src/include/hpp/tool/interactiveLandmark.hpp
+    src/include/hpp/display/landmark.hpp
+    src/include/hpp/display/landmarkProperty.hpp
 )
 
 if(QT_VERSION_MAJOR EQUAL 6)
@@ -72,8 +72,8 @@ add_library(
     src/src/panel/trajectory_slider.cpp
     src/src/panel/ui.cpp
     src/src/panel/communication.cpp
-    src/src/tool/landMark.cpp
-    src/src/display/landMark.cpp
+    src/src/tool/landmark.cpp
+    src/src/display/landmark.cpp
     ${MOC_FILES}
 )
 
@@ -101,7 +101,7 @@ install(
 install(DIRECTORY src/include/ DESTINATION include)
 install(FILES rviz_common_plugins.xml DESTINATION share/${PROJECT_NAME})
 install(
-    FILES src/icons/Trajectory.png src/icons/LandMark.png
+    FILES src/icons/Trajectory.png src/icons/Landmark.png
     DESTINATION share/${PROJECT_NAME}/icons/classes
 )
 ament_export_include_directories(include)

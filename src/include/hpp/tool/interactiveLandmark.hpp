@@ -14,12 +14,12 @@
 
 namespace hpp {
 
-class InteractiveLandMark : public visualization_msgs::msg::InteractiveMarker {
+class InteractiveLandmark : public visualization_msgs::msg::InteractiveMarker {
  public:
-  InteractiveLandMark() = default;
-  InteractiveLandMark(const Ogre::Vector3& pos, const Ogre::Quaternion& orient,
-                      const std::string& name = "LandMark",
-                      const std::string& description = "hpp LandMark") {
+  InteractiveLandmark() = default;
+  InteractiveLandmark(const Ogre::Vector3& pos, const Ogre::Quaternion& orient,
+                      const std::string& name = "Landmark",
+                      const std::string& description = "hpp Landmark") {
     this->header.frame_id = "world";
     this->scale = 0.2;
     this->name = name;

@@ -1,4 +1,4 @@
-#include "../../include/hpp/display/landMark.hpp"
+#include "../../include/hpp/display/landmark.hpp"
 
 #include <QMetaObject>
 #include <QStringList>
@@ -10,13 +10,13 @@
 namespace hpp {
 namespace displays {
 
-void LandMarkDisplay::onInitialize() {
+void LandmarkDisplay::onInitialize() {
   rviz_default_plugins::displays::InteractiveMarkerDisplay::onInitialize();
 
   group_property_ = new rviz_common::properties::Property(
-      "LandMarks", QVariant(), "LandMarks description", this);
+      "Landmarks", QVariant(), "Landmarks description", this);
 
-  const std::string server_topic = "/hpp_LandMark_server";
+  const std::string server_topic = "/hpp_landmark_server";
   setTopic(QString::fromStdString(server_topic), "");
 
   auto* show_axes = findProperty("Show Axes");
@@ -35,7 +35,7 @@ void LandMarkDisplay::onInitialize() {
   node_ptr_ = context_->getRosNodeAbstraction();
   auto node_lock = node_ptr_.lock();
   if (!node_lock) {
-    setStatus(rviz_common::properties::StatusProperty::Error, "LandMark",
+    setStatus(rviz_common::properties::StatusProperty::Error, "Landmark",
               "Unable to access ROS node.");
     return;
   }
@@ -45,43 +45,43 @@ void LandMarkDisplay::onInitialize() {
   update_sub_ = node->create_subscription<
       visualization_msgs::msg::InteractiveMarkerUpdate>(
       server_topic + "/update", update_qos,
-      std::bind(&LandMarkDisplay::onUpdateMessage, this,
+      std::bind(&LandmarkDisplay::onUpdateMessage, this,
                 std::placeholders::_1));
 
-  LandMark_visiblilty_pub_ = node->create_publisher<hpp_rviz::msg::HppLandMark>(
-      server_topic + "/LandMark_visibility", 10);
+  Landmark_visiblilty_pub_ = node->create_publisher<hpp_rviz::msg::Landmark>(
+      server_topic + "/landmark_visibility", 10);
 
-  LandMark_visiblilty_pub_ = node->create_publisher<hpp_rviz::msg::HppLandMark>(
-      server_topic + "/LandMark_visibility", 10);
+  Landmark_visiblilty_pub_ = node->create_publisher<hpp_rviz::msg::Landmark>(
+      server_topic + "/landmark_visibility", 10);
 
-  setStatus(rviz_common::properties::StatusProperty::Ok, "LandMark",
+  setStatus(rviz_common::properties::StatusProperty::Ok, "Landmark",
             "Listening for interactive marker updates.");
 }
 
-void LandMarkDisplay::onLandMarkEnabledChanged(const std::string& name,
+void LandmarkDisplay::onLandmarkEnabledChanged(const std::string& name,
                                                bool enabled) {
-  RCUTILS_LOG_INFO("LandMark '%s' enabled changed to %s", name.c_str(),
+  RCUTILS_LOG_INFO("Landmark '%s' enabled changed to %s", name.c_str(),
                    enabled ? "true" : "false");
-  auto it = LandMark_properties_.find(name);
-  if (it == LandMark_properties_.end()) return;
-  hpp_rviz::msg::HppLandMark msg;
+  auto it = Landmark_properties_.find(name);
+  if (it == Landmark_properties_.end()) return;
+  hpp_rviz::msg::Landmark msg;
   msg.name = name;
   msg.enable = enabled;
-  LandMark_visiblilty_pub_->publish(msg);
+  Landmark_visiblilty_pub_->publish(msg);
 }
 
-void LandMarkDisplay::onUpdateMessage(
+void LandmarkDisplay::onUpdateMessage(
     const visualization_msgs::msg::InteractiveMarkerUpdate::SharedPtr msg) {
   QMetaObject::invokeMethod(
       this,
       [this, msg]() {
         for (const auto& marker : msg->markers) {
-          if (LandMark_properties_.count(marker.name)) {
+          if (Landmark_properties_.count(marker.name)) {
             continue;
           }
-          auto wp = std::make_unique<LandMarkProperty>(
+          auto wp = std::make_unique<LandmarkProperty>(
               QString::fromStdString(marker.name),
-              QString::fromStdString("LandMark " + marker.name),
+              QString::fromStdString("Landmark " + marker.name),
               marker.header.frame_id,
               Ogre::Vector3((float)marker.pose.position.x,
                             (float)marker.pose.position.y,
@@ -92,23 +92,23 @@ void LandMarkDisplay::onUpdateMessage(
                                (float)marker.pose.orientation.z),
               group_property_);
 
-          connect(wp.get(), &LandMarkProperty::enabledChanged, this,
-                  &LandMarkDisplay::onLandMarkEnabledChanged);
+          connect(wp.get(), &LandmarkProperty::enabledChanged, this,
+                  &LandmarkDisplay::onLandmarkEnabledChanged);
 
-          LandMark_properties_.emplace(marker.name, std::move(wp));
+          Landmark_properties_.emplace(marker.name, std::move(wp));
         }
 
         for (const auto& erased_name : msg->erases) {
-          auto it = LandMark_properties_.find(erased_name);
-          if (it != LandMark_properties_.end()) {
+          auto it = Landmark_properties_.find(erased_name);
+          if (it != Landmark_properties_.end()) {
             it->second->removeFromParent();
-            LandMark_properties_.erase(it);
+            Landmark_properties_.erase(it);
           }
         }
 
         for (const auto& marker : msg->poses) {
-          auto it = LandMark_properties_.find(marker.name);
-          if (it != LandMark_properties_.end()) {
+          auto it = Landmark_properties_.find(marker.name);
+          if (it != Landmark_properties_.end()) {
             it->second->setPosition(Ogre::Vector3(
                 (float)marker.pose.position.x, (float)marker.pose.position.y,
                 (float)marker.pose.position.z));
@@ -127,4 +127,4 @@ void LandMarkDisplay::onUpdateMessage(
 }  // namespace hpp
 
 #include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(hpp::displays::LandMarkDisplay, rviz_common::Display)
+PLUGINLIB_EXPORT_CLASS(hpp::displays::LandmarkDisplay, rviz_common::Display)
