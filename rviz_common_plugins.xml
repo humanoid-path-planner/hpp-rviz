@@ -5,10 +5,10 @@
   <class name="TrajectorySlider" type="hpp::panel::TrajectorySlider" base_class_type="rviz_common::Panel">
     <description>hpp trajectory panel</description>
   </class>
-  <class name="LandMark" type="hpp::tool::LandMark" base_class_type="rviz_common::Tool">
-    <description>hpp LandMark tool</description>
+  <class name="Landmark" type="hpp::tool::Landmark" base_class_type="rviz_common::Tool">
+    <description>hpp Landmark tool</description>
   </class>
-  <class name="LandMark" type="hpp::displays::LandMarkDisplay" base_class_type="rviz_common::Display">
-    <description>hpp LandMark display</description>
+  <class name="Landmark" type="hpp::displays::LandmarkDisplay" base_class_type="rviz_common::Display">
+    <description>hpp Landmark display</description>
   </class>
 </library>
