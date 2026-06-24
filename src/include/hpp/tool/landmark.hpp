@@ -39,15 +39,16 @@ class Landmark : public rviz_common::Tool {
   interactive_markers::MenuHandler menu_handler_;
   interactive_markers::MenuHandler::EntryHandle edit_menu_handle_;
   interactive_markers::MenuHandler::EntryHandle delete_menu_handle_;
-  rclcpp::Subscription<hpp_rviz::msg::Landmark>::SharedPtr
-      Landmark_sub_;
+  rclcpp::Subscription<hpp_rviz::msg::Landmark>::SharedPtr Landmark_sub_;
   rclcpp::Subscription<hpp_rviz::msg::Landmark>::SharedPtr
       Landmark_visibility_sub_;
   int Landmark_count_ = 0;
 
   void onLandmarkVisibilityReceived(
       const hpp_rviz::msg::Landmark::SharedPtr msg);
-  void createInteractiveLandmark(Ogre::Vector3 translation, Ogre::Quaternion orientation, std::string name);
+  void createInteractiveLandmark(Ogre::Vector3 translation,
+                                 Ogre::Quaternion orientation,
+                                 std::string name);
   void processFeedback(
       const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr&
           feedback);
