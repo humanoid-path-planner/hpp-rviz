@@ -1,4 +1,4 @@
-#include "../../include/hpp/tool/landMark.hpp"
+#include "../../include/hpp/tool/landmark.hpp"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -7,49 +7,50 @@
 #include <QVBoxLayout>
 #include <pluginlib/class_list_macros.hpp>
 #include <rviz_common/viewport_mouse_event.hpp>
+#include <string>
+
+#include "hpp_rviz/msg/landmark.hpp"
 
 namespace hpp {
 namespace tool {
 
-LandMark::LandMark() = default;
+Landmark::Landmark() = default;
 
-LandMark::~LandMark() = default;
+Landmark::~Landmark() = default;
 
-void LandMark::onInitialize() {
+void Landmark::onInitialize() {
   rviz_common::Tool::onInitialize();
   node_ptr_ = context_->getRosNodeAbstraction().lock();
   rclcpp::Node::SharedPtr node = node_ptr_.lock()->get_raw_node();
 
   server_ = std::make_shared<interactive_markers::InteractiveMarkerServer>(
-      "hpp_LandMark_server", node);
+      "hpp_landmark_server", node);
 
   // Setup menu handler
 
-  // Subscribe to LandMark topic for precise placement
-  LandMark_sub_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
-      "/hpp_LandMark_server/LandMark", 10,
-      std::bind(&LandMark::onLandMarkReceived, this, std::placeholders::_1));
+  Landmark_sub_ = node->create_subscription<hpp_rviz::msg::Landmark>(
+      "/hpp_landmark_server/landmark", 10,
+      std::bind(&Landmark::onLandmarkReceived, this, std::placeholders::_1));
 
-  LandMark_visibility_sub_ =
-      node->create_subscription<hpp_rviz::msg::HppLandMark>(
-          "/hpp_LandMark_server/LandMark_visibility", 10,
-          std::bind(&LandMark::onLandMarkVisibilityReceived, this,
-                    std::placeholders::_1));
+  Landmark_visibility_sub_ = node->create_subscription<hpp_rviz::msg::Landmark>(
+      "/hpp_landmark_server/landmark_visibility", 10,
+      std::bind(&Landmark::onLandmarkVisibilityReceived, this,
+                std::placeholders::_1));
 }
 
-void LandMark::activate() {}
-void LandMark::deactivate() {}
+void Landmark::activate() {}
+void Landmark::deactivate() {}
 
-void LandMark::onLandMarkVisibilityReceived(
-    const hpp_rviz::msg::HppLandMark::SharedPtr msg) {
+void Landmark::onLandmarkVisibilityReceived(
+    const hpp_rviz::msg::Landmark::SharedPtr msg) {
   std::string name = msg->name;
   bool enable = msg->enable;
   QMetaObject::invokeMethod(
       this,
       [this, name, enable]() {
-        auto it = interactive_LandMarks_.find(name);
-        if (it == interactive_LandMarks_.end()) {
-          RCUTILS_LOG_WARN("LandMark '%s' not found", name.c_str());
+        auto it = interactive_Landmarks_.find(name);
+        if (it == interactive_Landmarks_.end()) {
+          RCUTILS_LOG_WARN("Landmark '%s' not found", name.c_str());
           return;
         }
 
@@ -64,7 +65,7 @@ void LandMark::onLandMarkVisibilityReceived(
 
         server_->insert(
             marker_to_insert,
-            std::bind(&LandMark::processFeedback, this, std::placeholders::_1));
+            std::bind(&Landmark::processFeedback, this, std::placeholders::_1));
 
         if (enable) {
           menu_handler_.apply(*server_, marker_to_insert.name);
@@ -74,62 +75,53 @@ void LandMark::onLandMarkVisibilityReceived(
       Qt::QueuedConnection);
 }
 
-int LandMark::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
+int Landmark::processMouseEvent(rviz_common::ViewportMouseEvent& event) {
   if (event.leftDown()) {
     Ogre::Vector3 position_3d;
     if (context_->getViewPicker()->get3DPoint(event.panel, event.x, event.y,
                                               position_3d)) {
-      geometry_msgs::msg::PoseStamped pos_msg;
-      pos_msg.header.frame_id = "world";
-      pos_msg.pose.position.x = position_3d.x;
-      pos_msg.pose.position.y = position_3d.y;
-      pos_msg.pose.position.z = position_3d.z;
-      pos_msg.pose.orientation.w = 1.0;
-      createInteractiveLandMark(pos_msg);
+      Ogre::Quaternion quat(1, 0, 0, 0);
+      createInteractiveLandmark(position_3d, quat, "");
     }
   }
 
   return 0;
 }
 
-void LandMark::createInteractiveLandMark(
-    const geometry_msgs::msg::PoseStamped& pos) {
-  Ogre::Vector3 position(pos.pose.position.x, pos.pose.position.y,
-                         pos.pose.position.z);
-  Ogre::Quaternion orientation(pos.pose.orientation.w, pos.pose.orientation.x,
-                               pos.pose.orientation.y, pos.pose.orientation.z);
+void Landmark::createInteractiveLandmark(Ogre::Vector3 translation,
+                                         Ogre::Quaternion orientation,
+                                         std::string name) {
+  const int Landmark_id = Landmark_count_++;
+  if (name.empty()) name = "Landmark_" + std::to_string(Landmark_id);
 
-  const int LandMark_id = LandMark_count_++;
+  InteractiveLandmark int_marker(translation, orientation, name,
+                                 "Landmark_" + std::to_string(Landmark_id));
 
-  InteractiveLandMark int_marker(position, orientation,
-                                 "LandMark_" + std::to_string(LandMark_id),
-                                 "LandMark_" + std::to_string(LandMark_id));
-
-  server_->insert(int_marker, std::bind(&LandMark::processFeedback, this,
+  server_->insert(int_marker, std::bind(&Landmark::processFeedback, this,
                                         std::placeholders::_1));
 
   menu_handler_.apply(*server_, int_marker.name);
-  interactive_LandMarks_[int_marker.name] =
-      std::make_unique<InteractiveLandMark>(int_marker);
+  interactive_Landmarks_[int_marker.name] =
+      std::make_unique<InteractiveLandmark>(int_marker);
   server_->applyChanges();
 }
 
-void LandMark::processFeedback(
+void Landmark::processFeedback(
     const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr&
         feedback) {
   if (feedback->event_type ==
       visualization_msgs::msg::InteractiveMarkerFeedback::POSE_UPDATE) {
     server_->setPose(feedback->marker_name, feedback->pose);
     server_->applyChanges();
-    auto it = interactive_LandMarks_.find(feedback->marker_name);
-    if (it != interactive_LandMarks_.end()) {
+    auto it = interactive_Landmarks_.find(feedback->marker_name);
+    if (it != interactive_Landmarks_.end()) {
       it->second->pose = feedback->pose;
     }
   } else if (feedback->event_type ==
              visualization_msgs::msg::InteractiveMarkerFeedback::MENU_SELECT) {
     if (feedback->menu_entry_id == edit_menu_handle_) {
       QDialog dialog;
-      dialog.setWindowTitle("Edit LandMark position");
+      dialog.setWindowTitle("Edit Landmark position");
 
       auto* layout = new QVBoxLayout(&dialog);
       auto* form = new QFormLayout();
@@ -191,11 +183,13 @@ void LandMark::processFeedback(
   }
 }
 
-void LandMark::onLandMarkReceived(
-    const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
-  createInteractiveLandMark(*msg);
+void Landmark::onLandmarkReceived(const hpp_rviz::msg::Landmark landmark) {
+  Ogre::Vector3 translation(landmark.tx, landmark.ty, landmark.tz);
+  Ogre::Quaternion orientation(landmark.ow, landmark.ox, landmark.oy,
+                               landmark.oz);
+  createInteractiveLandmark(translation, orientation, landmark.name);
 }
 }  // namespace tool
 }  // namespace hpp
 
-PLUGINLIB_EXPORT_CLASS(hpp::tool::LandMark, rviz_common::Tool)
+PLUGINLIB_EXPORT_CLASS(hpp::tool::Landmark, rviz_common::Tool)
