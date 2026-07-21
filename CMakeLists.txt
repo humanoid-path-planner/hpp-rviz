@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Copyright (c) 2014, 2020 CNRS Author: Florent Lamiraux, Guilhem Saurel
 #
 # This file is part of hpp-gepetto-viewer. hpp-gepetto-viewer is free software:
@@ -19,6 +17,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(hpp_rviz VERSION 8.0.0 LANGUAGES C CXX)
 
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(PROJECT_USE_CMAKE_EXPORT TRUE)
 
 find_package(ament_cmake REQUIRED)
@@ -50,7 +49,8 @@ find_package(visualization_msgs REQUIRED)
 
 set(HPP_RVIZ_PLUGIN_TARGET "hpp_ros_visualization")
 
-set(MOC_FILE_TMP
+qt_wrap_cpp(
+    MOC_FILES
     src/include/hpp/display/trajectory.hpp
     src/include/hpp/panel/trajectory_slider.hpp
     src/include/hpp/doubleSlider.hpp
@@ -59,12 +59,6 @@ set(MOC_FILE_TMP
     src/include/hpp/display/landMark.hpp
     src/include/hpp/display/landMarkProperty.hpp
 )
-
-if(QT_VERSION_MAJOR EQUAL 6)
-    qt6_wrap_cpp(MOC_FILES ${MOC_FILE_TMP})
-else()
-    qt5_wrap_cpp(MOC_FILES ${MOC_FILE_TMP})
-endif()
 
 add_library(
     ${HPP_RVIZ_PLUGIN_TARGET}

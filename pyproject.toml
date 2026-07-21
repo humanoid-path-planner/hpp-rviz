@@ -3,11 +3,8 @@ dependencies = [
 ]
 description = "Rviz plugins for hpp visualization"
 license = "BSD-2-Clause"
-name = "hpp-rviz2"
+name = "hpp-rviz"
 version = "8.0.0"
-
-[tool.ruff]
-extend-exclude = ["cmake"]
 
 [tool.ruff.lint]
 extend-select = ["I", "NPY", "RUF", "UP", "W"]
