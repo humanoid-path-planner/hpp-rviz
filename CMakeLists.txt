@@ -15,7 +15,7 @@
 # dependency: python-rospkg
 
 cmake_minimum_required(VERSION 3.22)
-project(hpp_rviz VERSION 8.0.0 LANGUAGES C CXX)
+project(hpp_rviz VERSION 9.0.2 LANGUAGES C CXX)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(PROJECT_USE_CMAKE_EXPORT TRUE)
