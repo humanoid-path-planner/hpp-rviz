@@ -158,7 +158,6 @@ QTreeWidgetItem* TrajectorySlider::addJointSliderItem(QTreeWidgetItem* parent,
   auto* hbox = new QHBoxLayout(container);
   hbox->setContentsMargins(0, 0, 0, 0);
   hbox->setSpacing(0);
-  hbox->setMargin(0);
 
   DoubleSlider* my_slider = item->data(1, Qt::UserRole).value<DoubleSlider*>();
   hbox->addWidget(my_slider);
@@ -185,7 +184,6 @@ void TrajectorySlider::addFreeFlyerSliderItem(
     container->setContentsMargins(0, 0, 0, 0);
     auto* hbox = new QHBoxLayout(container);
     hbox->setContentsMargins(0, 0, 0, 0);
-    hbox->setMargin(0);
     hbox->setSpacing(0);
 
     DoubleSlider* my_slider =
