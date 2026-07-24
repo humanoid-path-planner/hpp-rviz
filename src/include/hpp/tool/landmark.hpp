@@ -3,7 +3,7 @@
 #include <OgreVector3.h>
 
 #include <geometry_msgs/msg/point_stamped.hpp>
-#include <hpp_rviz/msg/hpp_land_mark.hpp>
+#include <hpp_rviz/msg/landmark.hpp>
 #include <interactive_markers/interactive_marker_server.hpp>
 #include <interactive_markers/menu_handler.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -14,16 +14,17 @@
 #include <rviz_common/tool.hpp>
 #include <visualization_msgs/msg/interactive_marker.hpp>
 
-#include "interactiveLandMark.hpp"
+#include "hpp_rviz/msg/landmark.hpp"
+#include "interactiveLandmark.hpp"
 
 namespace hpp {
 namespace tool {
 
-class LandMark : public rviz_common::Tool {
+class Landmark : public rviz_common::Tool {
   Q_OBJECT
  public:
-  LandMark();
-  ~LandMark();
+  Landmark();
+  ~Landmark();
 
   void onInitialize() override;
   void activate() override;
@@ -31,26 +32,27 @@ class LandMark : public rviz_common::Tool {
   int processMouseEvent(rviz_common::ViewportMouseEvent& event) override;
 
  private:
-  std::map<std::string, std::unique_ptr<InteractiveLandMark>>
-      interactive_LandMarks_;
+  std::map<std::string, std::unique_ptr<InteractiveLandmark>>
+      interactive_Landmarks_;
   rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr node_ptr_;
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> server_;
   interactive_markers::MenuHandler menu_handler_;
   interactive_markers::MenuHandler::EntryHandle edit_menu_handle_;
   interactive_markers::MenuHandler::EntryHandle delete_menu_handle_;
-  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr
-      LandMark_sub_;
-  rclcpp::Subscription<hpp_rviz::msg::HppLandMark>::SharedPtr
-      LandMark_visibility_sub_;
-  int LandMark_count_ = 0;
+  rclcpp::Subscription<hpp_rviz::msg::Landmark>::SharedPtr Landmark_sub_;
+  rclcpp::Subscription<hpp_rviz::msg::Landmark>::SharedPtr
+      Landmark_visibility_sub_;
+  int Landmark_count_ = 0;
 
-  void onLandMarkVisibilityReceived(
-      const hpp_rviz::msg::HppLandMark::SharedPtr msg);
-  void createInteractiveLandMark(const geometry_msgs::msg::PoseStamped& pos);
+  void onLandmarkVisibilityReceived(
+      const hpp_rviz::msg::Landmark::SharedPtr msg);
+  void createInteractiveLandmark(Ogre::Vector3 translation,
+                                 Ogre::Quaternion orientation,
+                                 std::string name);
   void processFeedback(
       const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr&
           feedback);
-  void onLandMarkReceived(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+  void onLandmarkReceived(const hpp_rviz::msg::Landmark msg);
 };
 
 }  // namespace tool
